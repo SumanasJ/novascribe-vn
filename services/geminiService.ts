@@ -13,9 +13,14 @@ export class GeminiService {
   /**
    * Brainstorms a branching narrative structure based on a summary.
    * @param model Optional model name (default: gemini-2.5-flash)
+   * @param apiKey Optional API key (overrides environment variable)
    */
-  async brainstormStructure(summary: string, config?: TreeGenConfig, model?: string): Promise<Partial<VNGraph>> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  async brainstormStructure(summary: string, config?: TreeGenConfig, model?: string, apiKey?: string): Promise<Partial<VNGraph>> {
+    const key = apiKey || (typeof process !== 'undefined' ? process.env.API_KEY : undefined);
+    if (!key) {
+      throw new Error("API key not found. Please provide an API key.");
+    }
+    const ai = new GoogleGenAI({ apiKey: key });
     const modelName = model || "gemini-2.5-flash";
     
     const dimensionsPrompt = config ? `
@@ -164,14 +169,22 @@ export class GeminiService {
    * @param graph The current story graph
    * @param storySummary Overall story summary for context
    * @param model Optional model name
+   * @param apiKey Optional API key (overrides environment variable)
+   * @param customPrompt Optional custom prompt from user
    */
   async generateNodeContent(
     nodeId: string,
     graph: VNGraph,
     storySummary: string,
-    model?: string
+    model?: string,
+    apiKey?: string,
+    customPrompt?: string
   ): Promise<Partial<VNNodeData>> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const key = apiKey || (typeof process !== 'undefined' ? process.env.API_KEY : undefined);
+    if (!key) {
+      throw new Error("API key not found. Please provide an API key.");
+    }
+    const ai = new GoogleGenAI({ apiKey: key });
     const modelName = model || "gemini-2.5-flash";
 
     const node = graph.nodes.find(n => n.id === nodeId);
@@ -190,6 +203,23 @@ export class GeminiService {
       .map(e => graph.nodes.find(n => n.id === e.target))
       .filter(Boolean);
 
+    // Analyze narrative function based on connections
+    let narrativeFunction = "延续剧情";
+    if (incomingNodes.length === 0 && outgoingNodes.length > 0) {
+      narrativeFunction = "起点开场";
+    } else if (incomingNodes.length > 0 && outgoingNodes.length === 0) {
+      narrativeFunction = "结局收束";
+    } else if (outgoingNodes.length > 1) {
+      narrativeFunction = "分支点";
+    } else if (incomingNodes.length > 1) {
+      narrativeFunction = "汇聚点";
+    }
+
+    const customPromptSection = customPrompt ? `
+      【用户自定义要求】
+      ${customPrompt}
+    ` : "";
+
     const contextPrompt = `
       你是一位视觉小说（Visual Novel）编剧。请为以下剧情节点生成或重新生成内容。
 
@@ -199,6 +229,7 @@ export class GeminiService {
       【当前节点】
       ID: ${node.id}
       当前标签: ${node.label}
+      叙事功能: ${narrativeFunction}
 
       【前置节点（来源）】
       ${incomingNodes.length > 0 ? incomingNodes.map(n => `- ${n!.label}: ${n!.content?.slice(0, 100) || "暂无内容"}`).join('\n') : "无（这是起点节点）"}
@@ -206,10 +237,12 @@ export class GeminiService {
       【后置节点（去向）】
       ${outgoingNodes.length > 0 ? outgoingNodes.map(n => `- ${n!.label}: ${n!.content?.slice(0, 100) || "暂无内容"}`).join('\n') : "无（这是终点节点）"}
 
+      ${customPromptSection}
+
       请生成以下内容（JSON格式）：
       {
         "label": "节点标题（简短有力，中文）",
-        "content": "详细的剧情内容（包括对话、场景描写、氛围营造，300-500字，中文）",
+        "content": "简明的剧情描述（50-150字，中文），说明发生了什么，不需要详细对话",
         "location": "场景地点（中文）",
         "hasChoice": true/false,
         "preconditions": [
@@ -230,11 +263,17 @@ export class GeminiService {
       }
 
       要求：
-      1. 内容必须与前后节点逻辑连贯
-      2. 如果是起点，要有吸引力的开场
-      3. 如果是终点，要有收束感
+      1. 内容简明扼要（50-150字），直接说明发生了什么
+      2. 不要引入新角色，除非故事背景中已存在
+      3. 根据叙事功能调整内容风格：
+         - 起点开场：吸引注意，快速切入主题
+         - 延续剧情：承接上文，推进情节
+         - 分支点：呈现选择的关键时刻
+         - 汇聚点：收束多条线，汇总发展
+         - 结局收束：给出明确结局
       4. hasChoice根据是否有分支决定
       5. preconditions和effects要符合叙事逻辑
+      6. 优先满足【用户自定义要求】中的所有要求
     `;
 
     let lastError: any;

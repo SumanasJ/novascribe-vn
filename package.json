@@ -1,7 +1,7 @@
 {
-  "name": "novascribe-vn-architect-v0.1",
+  "name": "novascribe-vn-architect-v0.4",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

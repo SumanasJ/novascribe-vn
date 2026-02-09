@@ -66,8 +66,8 @@ const VariableManager: React.FC<VariableManagerProps> = ({ variables, onUpdate }
             </div>
             
             <div className="flex items-center gap-3">
-              <button 
-                onClick={() => updateVar(v.id, { 
+              <button
+                onClick={() => updateVar(v.id, {
                   type: v.type === 'number' ? 'boolean' : 'number',
                   defaultValue: v.type === 'number' ? false : 0,
                   currentValue: v.type === 'number' ? false : 0
@@ -75,7 +75,7 @@ const VariableManager: React.FC<VariableManagerProps> = ({ variables, onUpdate }
                 className="p-1 bg-slate-800 rounded flex items-center gap-1.5 px-2 text-[9px] font-bold text-slate-400 hover:text-indigo-400 transition-colors"
               >
                 {v.type === 'number' ? <Hash size={10} /> : <ToggleLeft size={10} />}
-                {v.type.toUpperCase()}
+                {(v.type || 'string').toUpperCase()}
               </button>
 
               {v.type === 'number' && (

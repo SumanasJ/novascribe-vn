@@ -59,6 +59,8 @@ const App: React.FC = () => {
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiModel, setAiModel] = useState("gemini-2.5-flash"); // gemini-2.5-flash, gemini-2.5-pro, gpt-4o, etc.
   const [generatingNodeId, setGeneratingNodeId] = useState<string | null>(null);
+  const [nodeCustomPrompt, setNodeCustomPrompt] = useState("");
+  const [showNodePromptInput, setShowNodePromptInput] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
   const [showAiConfig, setShowAiConfig] = useState(false);
   const [showApiSettings, setShowApiSettings] = useState(false);
@@ -360,78 +362,104 @@ const App: React.FC = () => {
       const isGemini = aiModel.startsWith('gemini');
       const service = isGemini ? gemini : openai;
 
-      // Temporarily set API key in environment for this call
-      const originalKey = isGemini ? process.env.API_KEY : process.env.OPENAI_API_KEY;
-      if (aiApiKey) {
-        if (isGemini) {
-          (process.env as any).API_KEY = aiApiKey;
-        } else {
-          (process.env as any).OPENAI_API_KEY = aiApiKey;
-        }
+      console.log('[AI Brainstorm] Starting full story generation...');
+      console.log('[AI Brainstorm] Model:', aiModel);
+      console.log('[AI Brainstorm] Has API Key:', !!aiApiKey);
+      console.log('[AI Brainstorm] Config:', aiConfig);
+
+      // Pass API key directly to service
+      const result = await service.brainstormStructure(aiPrompt, aiConfig, aiModel, aiApiKey || undefined);
+
+      console.log('[AI Brainstorm] Result received:', result ? 'Success' : 'Failed');
+
+      if (!result) {
+        throw new Error('API 返回了空结果');
       }
 
-      const result = await service.brainstormStructure(aiPrompt, aiConfig, aiModel);
-
-      // Restore original API key
-      if (isGemini) {
-        (process.env as any).API_KEY = originalKey;
-      } else {
-        (process.env as any).OPENAI_API_KEY = originalKey;
-      }
-      if (result.nodes) {
+      if (result.nodes && result.nodes.length > 0) {
         const newGraph: VNGraph = {
-          nodes: (result.nodes as any[]).map((n, i) => ({
-            ...n,
-            // v0.2: Convert all nodes to SCENE type
-            type: NodeType.SCENE,
-            // Determine hasChoice based on options
-            hasChoice: !!(n.options && n.options.length > 0),
-            location: n.location || '新区域',
-            preconditions: n.preconditions || [],
-            effects: n.effects || [],
-            tags: n.tags || [],
-            options: n.options || [],
-            isPoolMember: !!n.isPoolMember,
-            groupFrame: n.groupFrame || '',
-            position: n.position || { x: i * 350 + 50, y: 150 }
-          })),
+          nodes: (result.nodes as any[]).map((n, i) => {
+            if (!n) {
+              console.error('[AI Brainstorm] Invalid node at index', i);
+              return null;
+            }
+            return {
+              ...n,
+              // v0.2: Convert all nodes to SCENE type
+              type: NodeType.SCENE,
+              // Determine hasChoice based on options
+              hasChoice: !!(n.options && n.options.length > 0),
+              location: n.location || '新区域',
+              preconditions: n.preconditions || [],
+              effects: n.effects || [],
+              tags: n.tags || [],
+              options: n.options || [],
+              isPoolMember: !!n.isPoolMember,
+              groupFrame: n.groupFrame || '',
+              position: n.position || { x: i * 350 + 50, y: 150 }
+            };
+          }).filter((n): n is VNNodeData => n !== null),
           edges: (result.edges as any[]) || [],
           variables: (result.variables as any[]) || graph.variables,
           pools: []
         };
         setGraph(newGraph);
         saveSnapshot(`AI 生成: ${aiPrompt.slice(0, 10)}...`, newGraph);
-        if (result.nodes.length > 0) setSelectedNodeId(result.nodes[0].id);
+        if (result.nodes[0]?.id) setSelectedNodeId(result.nodes[0].id);
+      } else {
+        throw new Error('API 未返回任何节点');
       }
-    } catch (err) { setAiError("AI 引擎遇到错误。"); } finally { setIsBrainstorming(false); }
+    } catch (err: any) {
+      console.error('[AI Brainstorm] Error:', err);
+      console.error('[AI Brainstorm] Error details:', {
+        message: err?.message,
+        status: err?.status,
+        statusCode: err?.statusCode,
+        cause: err?.cause
+      });
+
+      let errorMsg = 'AI 引擎遇到错误';
+      if (err?.message) {
+        if (err.message.includes('API key') || err.message.includes('401')) {
+          errorMsg = 'API Key 无效或未设置，请检查 API 设置';
+        } else if (err.message.includes('Connection') || err.message.includes('network') || err.message.includes('fetch')) {
+          errorMsg = '网络连接失败，请检查网络设置';
+        } else if (err.message.includes('rate limit') || err.message.includes('quota') || err.message.includes('429')) {
+          errorMsg = 'API 配额已用完或达到速率限制';
+        } else {
+          errorMsg = `生成失败: ${err.message}`;
+        }
+      }
+      setAiError(errorMsg);
+    } finally { setIsBrainstorming(false); }
   };
 
   // v0.3: Generate single node content with AI
-  const handleGenerateNode = async (nodeId: string) => {
+  const handleGenerateNode = async (nodeId: string, customPrompt?: string) => {
     setGeneratingNodeId(nodeId);
     setAiError(null);
     try {
       const isGemini = aiModel.startsWith('gemini');
       const service = isGemini ? gemini : openai;
 
-      // Temporarily set API key
-      const originalKey = isGemini ? process.env.API_KEY : process.env.OPENAI_API_KEY;
-      if (aiApiKey) {
-        if (isGemini) {
-          (process.env as any).API_KEY = aiApiKey;
-        } else {
-          (process.env as any).OPENAI_API_KEY = aiApiKey;
-        }
-      }
+      console.log('[AI Generation] Starting node content generation...');
+      console.log('[AI Generation] Node ID:', nodeId);
+      console.log('[AI Generation] Model:', aiModel);
+      console.log('[AI Generation] Has API Key:', !!aiApiKey);
+      console.log('[AI Generation] Story prompt:', aiPrompt ? aiPrompt.slice(0, 100) : '(empty)');
+      console.log('[AI Generation] Custom prompt:', customPrompt || '(none)');
 
-      const result = await service.generateNodeContent(nodeId, graph, aiPrompt, aiModel);
+      // Pass API key and custom prompt directly to service method
+      const result = await service.generateNodeContent(
+        nodeId,
+        graph,
+        aiPrompt,
+        aiModel,
+        aiApiKey || undefined,
+        customPrompt
+      );
 
-      // Restore original API key
-      if (isGemini) {
-        (process.env as any).API_KEY = originalKey;
-      } else {
-        (process.env as any).OPENAI_API_KEY = originalKey;
-      }
+      console.log('[AI Generation] Result received:', result);
 
       // Update node with generated content
       const node = graph.nodes.find(n => n.id === nodeId);
@@ -446,11 +474,34 @@ const App: React.FC = () => {
           effects: result.effects || node.effects,
           isPoolMember: result.isPoolMember ?? node.isPoolMember
         };
+        console.log('[AI Generation] Updating node:', updated);
         handleUpdateNode(updated);
+        console.log('[AI Generation] Node updated successfully');
+      } else {
+        console.error('[AI Generation] Failed to update node - node or result is empty');
+        setAiError('生成结果为空，请重试');
       }
-    } catch (err) {
-      console.error("Node generation error:", err);
-      setAiError("节点内容生成失败。");
+    } catch (err: any) {
+      console.error('[AI Generation] Error:', err);
+      console.error('[AI Generation] Error details:', {
+        message: err?.message,
+        status: err?.status,
+        cause: err?.cause
+      });
+
+      let errorMsg = '节点内容生成失败';
+      if (err?.message) {
+        if (err.message.includes('API key') || err.message.includes('401')) {
+          errorMsg = 'API Key 无效或未设置，请检查 API 设置';
+        } else if (err.message.includes('Connection') || err.message.includes('network') || err.message.includes('fetch')) {
+          errorMsg = '网络连接失败，请检查网络设置';
+        } else if (err.message.includes('rate limit') || err.message.includes('quota') || err.message.includes('429')) {
+          errorMsg = 'API 配额已用完或达到速率限制';
+        } else {
+          errorMsg = `生成失败: ${err.message}`;
+        }
+      }
+      setAiError(errorMsg);
     } finally {
       setGeneratingNodeId(null);
     }
@@ -643,6 +694,16 @@ const App: React.FC = () => {
               <button onClick={handleBrainstorm} disabled={isBrainstorming || !aiPrompt} className="w-full bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2">
                 {isBrainstorming ? <RefreshCw className="animate-spin" size={14} /> : <BrainCircuit size={14} />} 生成剧情
               </button>
+              {/* Error message display */}
+              {aiError && (
+                <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-xs text-red-300">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={12} />
+                    <span className="font-bold">错误</span>
+                  </div>
+                  <p className="mt-1">{aiError}</p>
+                </div>
+              )}
             </div>
           </div>
           {/* 变量管理器 - 滚动到底部可见 */}
@@ -710,7 +771,7 @@ const App: React.FC = () => {
                         }}
                         disabled={generatingNodeId === node.id}
                         className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-indigo-600/20 to-fuchsia-600/20 hover:from-indigo-600/40 hover:to-fuchsia-600/40 border border-indigo-500/30 text-indigo-300"
-                        title="根据相邻节点和剧情梗概AI生成此节点内容"
+                        title="根据相邻节点和剧情梗概AI生成此节点内容（可在右侧面板添加自定义提示词）"
                       >
                         {generatingNodeId === node.id ? (
                           <>
@@ -777,14 +838,16 @@ const App: React.FC = () => {
         </section>
 
         <aside className="w-80 border-l border-slate-800 bg-slate-900 z-30">
-          <PropertyEditor 
-            node={selectedNode} 
+          <PropertyEditor
+            node={selectedNode}
             edge={selectedEdge}
-            variables={graph.variables} 
-            graph={graph} 
-            onUpdate={handleUpdateNode} 
-            onDelete={handleDeleteNode} 
+            variables={graph.variables}
+            graph={graph}
+            onUpdate={handleUpdateNode}
+            onDelete={handleDeleteNode}
             onDeleteEdge={handleDeleteEdge}
+            onGenerateNode={handleGenerateNode}
+            isGenerating={generatingNodeId !== null}
           />
         </aside>
       </main>

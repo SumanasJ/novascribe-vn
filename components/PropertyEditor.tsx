@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { VNNodeData, VNVariable, NodeType, VNCondition, VNEffect, VNGraph, VNChoiceOption, SceneCategory } from '../types';
-import { Trash2, Plus, Settings2, MapPin, GitBranch, MessageSquare, Layers, Link2, CheckCircle, HelpCircle } from 'lucide-react';
+import { Trash2, Plus, Settings2, MapPin, GitBranch, MessageSquare, Layers, Link2, CheckCircle, HelpCircle, Wand2, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface PropertyEditorProps {
   node: VNNodeData | null;
@@ -11,9 +11,13 @@ interface PropertyEditorProps {
   onUpdate: (updated: VNNodeData) => void;
   onDelete: (id: string) => void;
   onDeleteEdge: (id: string) => void;
+  onGenerateNode?: (nodeId: string, customPrompt?: string) => Promise<void>;
+  isGenerating?: boolean;
 }
 
-const PropertyEditor: React.FC<PropertyEditorProps> = ({ node, edge, variables, graph, onUpdate, onDelete, onDeleteEdge }) => {
+const PropertyEditor: React.FC<PropertyEditorProps> = ({ node, edge, variables, graph, onUpdate, onDelete, onDeleteEdge, onGenerateNode, isGenerating }) => {
+  const [customPrompt, setCustomPrompt] = React.useState("");
+  const [showCustomPrompt, setShowCustomPrompt] = React.useState(false);
   // Edge Selection Case
   if (edge && !node) {
     const sourceNode = graph.nodes.find(n => n.id === edge.source);
@@ -249,6 +253,51 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ node, edge, variables, 
               标记此节点为某个选项后的专属分支剧情
             </p>
           </div>
+
+          {/* AI Generation Section */}
+          {onGenerateNode && (
+            <div className="space-y-2 pt-2 border-t border-slate-800/50">
+              <div className="flex items-center justify-between">
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                  <Wand2 size={10} className="text-purple-400" /> AI 生成内容
+                </label>
+                <button
+                  onClick={() => setShowCustomPrompt(!showCustomPrompt)}
+                  className="text-[9px] text-slate-500 hover:text-slate-300 flex items-center gap-1"
+                >
+                  {showCustomPrompt ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  {showCustomPrompt ? '收起' : '自定义提示词'}
+                </button>
+              </div>
+
+              {showCustomPrompt && (
+                <div className="space-y-2">
+                  <textarea
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    className="w-full bg-slate-950/50 border border-slate-700 rounded-xl p-2.5 text-xs focus:outline-none focus:border-purple-500 transition-all resize-none"
+                    placeholder="可选：输入自定义提示词来指导AI生成内容..."
+                    rows={3}
+                  />
+                  <p className="text-[9px] text-slate-600 italic">
+                    例如：添加一个悬疑转折、让角色更情绪化、增加环境描写等
+                  </p>
+                </div>
+              )}
+
+              <button
+                onClick={() => onGenerateNode(node.id, customPrompt || undefined)}
+                disabled={isGenerating}
+                className="w-full py-2.5 text-[10px] font-black uppercase rounded-lg transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/40 hover:to-pink-600/40 border border-purple-500/30 text-purple-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Wand2 size={12} className={isGenerating ? 'animate-pulse' : ''} />
+                {isGenerating ? '生成中...' : 'AI 生成内容'}
+              </button>
+              <p className="text-[9px] text-slate-600 italic">
+                根据相邻节点和整体剧情背景生成此节点的内容
+              </p>
+            </div>
+          )}
         </section>
 
         {isContentNode && (
