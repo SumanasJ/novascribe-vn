@@ -7,6 +7,8 @@ export interface TreeGenConfig {
   optionsPerNode?: number;
   minDepth?: number;
   maxDepth?: number;
+  randomEvents?: number;      // v0.5: 随机日常事件数量
+  treeStructure?: string;      // v0.5: 树结构描述
 }
 
 export class OpenAIService {
@@ -33,6 +35,8 @@ export class OpenAIService {
       - 分支点数量：${config.branchPoints || 3}
       - 每个分支场景的选项数量：${config.optionsPerNode || 2}
       - 剧情深度：${config.minDepth || 3} 到 ${config.maxDepth || 5} 层级。
+      - 随机日常事件数量：${config.randomEvents || 0} 个（isPoolMember: true）
+      ${config.treeStructure ? `- 树结构要求：${config.treeStructure}` : ''}
     ` : "";
 
     const prompt = `
@@ -46,15 +50,24 @@ export class OpenAIService {
 
       生成规则：
       1. 'label'（标题）、'content'（剧情）、'location'（地点）和变量名称必须使用中文。
-      2. 节点说明：
-         - 所有节点统一使用 'SCENE' 类型。
-         - 起始节点：只有出边，没有入边。
-         - 结局节点：只有入边，没有出边。
-         - 标准剧情节点：既有入边又有出边。
-         - 自由剧情节点：无入边无出边（孤立场景）。
-      3. 'isPoolMember'：布尔值。如果该剧情是主线树的一部分，设为 false；如果是独立的随机/侧边事件，设为 true。
-      4. 逻辑变量：定义 2-5 个核心变量（如"信任度"、"勇气"），并在 preconditions 和 effects 中合理使用。
-      5. 确保 id 唯一。
+      2. 所有节点统一使用 'SCENE' 类型。
+      3. 节点分类：
+         - 起始节点：只有出边，没有入边（故事起点）
+         - 标准剧情节点：既有入边又有出边
+         - 结局节点：只有入边，没有出边（故事终点）
+         - 随机事件节点：isPoolMember 设为 true（独立的日常/侧边事件）
+      4. 'isPoolMember'：布尔值。主线剧情设为 false，随机日常事件设为 true。
+      5. 逻辑变量：定义 2-5 个核心变量（如"信任度"、"勇气"），并在 preconditions 和 effects 中合理使用。
+      6. 确保 id 唯一。
+
+      重要：edges 数组中的每个连线必须使用以下格式：
+      {
+        "id": "唯一标识",
+        "source": "起始节点id",
+        "target": "目标节点id",
+        "type": "FLOW"
+      }
+      注意：使用 "source" 和 "target"，不要使用 "from" 和 "to"！
 
       请以 JSON 格式返回，包含以下结构：
       {

@@ -79,11 +79,14 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
   const [showAiConfig, setShowAiConfig] = useState(false);
   const [showApiSettings, setShowApiSettings] = useState(false);
+  // v0.5: Extended config with random events and tree structure
   const [aiConfig, setAiConfig] = useState<TreeGenConfig>({
     branchPoints: 3,
     optionsPerNode: 2,
     minDepth: 3,
-    maxDepth: 5
+    maxDepth: 5,
+    randomEvents: 0,
+    treeStructure: ''
   });
   
   // History State
@@ -181,12 +184,17 @@ const App: React.FC = () => {
     }
   };
 
-  // v0.4: Export story to JSON file
+  // v0.5: Export story to JSON file with complete data
   const handleExportStory = useCallback(() => {
     const exportData = {
-      version: '0.4.0',
+      version: '0.5.0',
       exportedAt: new Date().toISOString(),
-      graph: graph,
+      graph: {
+        nodes: graph.nodes,
+        edges: graph.edges,  // Already in correct format with source/target
+        variables: graph.variables,
+        pools: graph.pools
+      },
       aiPrompt: aiPrompt,
       settings: {
         aiModel: aiModel,
@@ -205,7 +213,7 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   }, [graph, aiPrompt, aiModel, aiConfig]);
 
-  // v0.4: Import story from JSON file
+  // v0.5: Import story from JSON file with edge normalization
   const handleImportStory = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -217,16 +225,30 @@ const App: React.FC = () => {
         const importData = JSON.parse(content);
 
         // Validate the structure
-        if (!importData.graph || !importData.graph.nodes || !importData.graph.edges) {
+        if (!importData.graph || !importData.graph.nodes) {
           throw new Error('Invalid story file structure');
         }
 
-        if (confirm(`确定要导入故事文件吗？当前的故事将被替换。\n\n文件版本: ${importData.version || '未知'}\n导出时间: ${importData.exportedAt || '未知'}`)) {
-          setGraph(importData.graph);
+        // v0.5: Normalize edges from old format (from/to) to new format (source/target)
+        const normalizedEdges = (importData.graph.edges || []).map((e: any, i: number) => ({
+          id: e.id || `edge-${Date.now()}-${i}`,
+          source: e.source || e.from,
+          target: e.target || e.to,
+          type: e.type || 'FLOW',
+          label: e.label || undefined
+        })).filter((e: any) => e.source && e.target);
+
+        const normalizedGraph = {
+          ...importData.graph,
+          edges: normalizedEdges
+        };
+
+        if (confirm(`确定要导入故事文件吗？当前的故事将被替换。\n\n文件版本: ${importData.version || '未知'}\n导出时间: ${importData.exportedAt || '未知'}\n节点数: ${importData.graph.nodes?.length || 0}\n连线数: ${normalizedEdges.length}`)) {
+          setGraph(normalizedGraph);
           if (importData.aiPrompt) setAiPrompt(importData.aiPrompt);
           if (importData.settings?.aiModel) setAiModel(importData.settings.aiModel);
           if (importData.settings?.aiConfig) setAiConfig(importData.settings.aiConfig);
-          saveSnapshot('导入故事文件', importData.graph);
+          saveSnapshot('导入故事文件', normalizedGraph);
           setViewMode('tree');
         }
       } catch (error: any) {
@@ -481,6 +503,17 @@ const App: React.FC = () => {
       }
 
       if (result.nodes && result.nodes.length > 0) {
+        // v0.5: Normalize edges - convert from/to to source/target if needed
+        const normalizedEdges = ((result.edges as any[]) || []).map((e: any, i: number) => ({
+          id: e.id || `edge-${Date.now()}-${i}`,
+          source: e.source || e.from,
+          target: e.target || e.to,
+          type: e.type || 'FLOW',
+          label: e.label || undefined
+        })).filter((e: any) => e.source && e.target);
+
+        console.log('[AI Brainstorm] Normalized edges:', normalizedEdges);
+
         const newGraph: VNGraph = {
           nodes: (result.nodes as any[]).map((n, i) => {
             if (!n) {
@@ -503,7 +536,7 @@ const App: React.FC = () => {
               position: n.position || { x: i * 350 + 50, y: 150 }
             };
           }).filter((n): n is VNNodeData => n !== null),
-          edges: (result.edges as any[]) || [],
+          edges: normalizedEdges,
           variables: (result.variables as any[]) || graph.variables,
           pools: []
         };
@@ -799,9 +832,26 @@ const App: React.FC = () => {
               )}
 
               {showAiConfig && (
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>分支: {aiConfig.branchPoints} <input type="range" min="1" max="10" value={aiConfig.branchPoints} onChange={e => setAiConfig({...aiConfig, branchPoints: +e.target.value})} className="w-full h-1 accent-indigo-500" /></div>
-                  <div>层级: {aiConfig.maxDepth} <input type="range" min="1" max="10" value={aiConfig.maxDepth} onChange={e => setAiConfig({...aiConfig, maxDepth: +e.target.value})} className="w-full h-1 accent-indigo-500" /></div>
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>分支点: {aiConfig.branchPoints} <input type="range" min="1" max="10" value={aiConfig.branchPoints} onChange={e => setAiConfig({...aiConfig, branchPoints: +e.target.value})} className="w-full h-1 accent-indigo-500" /></div>
+                    <div>层级: {aiConfig.maxDepth} <input type="range" min="1" max="10" value={aiConfig.maxDepth} onChange={e => setAiConfig({...aiConfig, maxDepth: +e.target.value})} className="w-full h-1 accent-indigo-500" /></div>
+                  </div>
+                  {/* v0.5: New options */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>随机事件: {aiConfig.randomEvents || 0} <input type="range" min="0" max="10" value={aiConfig.randomEvents || 0} onChange={e => setAiConfig({...aiConfig, randomEvents: +e.target.value})} className="w-full h-1 accent-purple-500" /></div>
+                    <div className="text-slate-500">日常/支线剧情数量</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-slate-500">树结构描述 (可选):</div>
+                    <input
+                      type="text"
+                      value={aiConfig.treeStructure || ''}
+                      onChange={e => setAiConfig({...aiConfig, treeStructure: e.target.value})}
+                      placeholder="如：双线并行、多结局、线性叙事..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-[10px] focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
                 </div>
               )}
               <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="输入剧情梗概..." className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs h-24 focus:outline-none focus:border-indigo-500 resize-none" />

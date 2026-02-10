@@ -7,6 +7,8 @@ export interface TreeGenConfig {
   optionsPerNode?: number;
   minDepth?: number;
   maxDepth?: number;
+  randomEvents?: number;      // v0.5: 随机日常事件数量
+  treeStructure?: string;      // v0.5: 树结构描述
 }
 
 export class GeminiService {
@@ -22,12 +24,14 @@ export class GeminiService {
     }
     const ai = new GoogleGenAI({ apiKey: key });
     const modelName = model || "gemini-2.5-flash";
-    
+
     const dimensionsPrompt = config ? `
       结构约束：
       - 分支点数量：${config.branchPoints || 3}
       - 每个分支场景的选项数量：${config.optionsPerNode || 2}
       - 剧情深度：${config.minDepth || 3} 到 ${config.maxDepth || 5} 层级。
+      - 随机日常事件数量：${config.randomEvents || 0} 个（isPoolMember: true）
+      ${config.treeStructure ? `- 树结构要求：${config.treeStructure}` : ''}
     ` : "";
 
     const prompt = `
@@ -41,14 +45,24 @@ export class GeminiService {
 
       生成规则：
       1. 'label'（标题）、'content'（剧情）、'location'（地点）和变量名称必须使用中文。
-      2. 节点说明：
-         - 'START'：起始点。
-         - 'SCENE'：标准剧情节点，需包含对话或描述。
-         - 'GATE'：逻辑条件检查。
-         - 'END'：结局。
-      3. 'isPoolMember'：布尔值。如果该剧情是主线树的一部分，设为 false；如果是独立的随机/侧边事件，设为 true。
-      4. 逻辑变量：定义 2-5 个核心变量（如“信任度”、“勇气”），并在 preconditions 和 effects 中合理使用。
-      5. 确保 id 唯一。
+      2. 所有节点统一使用 'SCENE' 类型。
+      3. 节点分类：
+         - 起始节点：只有出边，没有入边（故事起点）
+         - 标准剧情节点：既有入边又有出边
+         - 结局节点：只有入边，没有出边（故事终点）
+         - 随机事件节点：isPoolMember 设为 true（独立的日常/侧边事件）
+      4. 'isPoolMember'：布尔值。主线剧情设为 false，随机日常事件设为 true。
+      5. 逻辑变量：定义 2-5 个核心变量（如"信任度"、"勇气"），并在 preconditions 和 effects 中合理使用。
+      6. 确保 id 唯一。
+
+      重要：edges 数组中的每个连线必须使用以下格式：
+      {
+        "id": "唯一标识",
+        "source": "起始节点id",
+        "target": "目标节点id",
+        "type": "FLOW"
+      }
+      注意：使用 "source" 和 "target"，不要使用 "from" 和 "to"！
     `;
 
     // Implement a simple retry mechanism for robustness against transient 500 errors
