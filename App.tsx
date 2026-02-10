@@ -71,8 +71,8 @@ const App: React.FC = () => {
   // v0.4: Read default model from environment variable
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiModel, setAiModel] = useState(() => {
-    // Try to get from environment variable, fallback to default
-    return (typeof process !== 'undefined' && process.env.DEFAULT_AI_MODEL) || "gemini-2.5-flash";
+    // v0.5.4: Updated to use GPT-5.2 as default
+    return (typeof process !== 'undefined' && process.env.DEFAULT_AI_MODEL) || "gpt-5.2";
   });
   const [generatingNodeId, setGeneratingNodeId] = useState<string | null>(null);
   const [nodeCustomPrompt, setNodeCustomPrompt] = useState("");
@@ -826,10 +826,21 @@ const App: React.FC = () => {
                       onChange={(e) => setAiModel(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500"
                     >
-                      <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                      <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                      <option value="gpt-4o">GPT-4o</option>
-                      <option value="gpt-4o-mini">GPT-4o Mini</option>
+                      <optgroup label="Gemini (Google)">
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                      </optgroup>
+                      <optgroup label="GPT-4 (OpenAI)">
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini</option>
+                      </optgroup>
+                      <optgroup label="GPT-5 (OpenAI)">
+                        <option value="gpt-5.2">GPT-5.2</option>
+                        <option value="gpt-5.2-pro">GPT-5.2 Pro</option>
+                        <option value="gpt-5.2-codex">GPT-5.2 Codex</option>
+                        <option value="gpt-5-mini">GPT-5 Mini</option>
+                        <option value="gpt-5-nano">GPT-5 Nano</option>
+                      </optgroup>
                     </select>
                   </div>
                   <div className="space-y-2">
