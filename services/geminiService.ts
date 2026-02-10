@@ -9,6 +9,7 @@ export interface TreeGenConfig {
   maxDepth?: number;
   randomEvents?: number;      // v0.5: 随机日常事件数量
   treeStructure?: string;      // v0.5: 树结构描述
+  endings?: number;            // v0.5.2: 结局数量
 }
 
 export class GeminiService {
@@ -26,10 +27,11 @@ export class GeminiService {
     const modelName = model || "gemini-2.5-flash";
 
     const dimensionsPrompt = config ? `
-      结构约束：
-      - 分支点数量：${config.branchPoints || 3}
-      - 每个分支场景的选项数量：${config.optionsPerNode || 2}
-      - 剧情深度：${config.minDepth || 3} 到 ${config.maxDepth || 5} 层级。
+      结构约束（必须严格遵守）：
+      - 分支点数量：${config.branchPoints || 3} 个（有多个出边的节点）
+      - 每个分支点的选项数量：${config.optionsPerNode || 2} 条（每个岔路口分出几条路）
+      - 剧情深度：${config.minDepth || 3} 到 ${config.maxDepth || 5} 层级
+      - 结局数量：${config.endings || 1} 个（必须生成恰好${config.endings || 1}个结局节点！）
       - 随机日常事件数量：${config.randomEvents || 0} 个（isPoolMember: true）
       ${config.treeStructure ? `- 树结构要求：${config.treeStructure}` : ''}
     ` : "";
@@ -43,17 +45,19 @@ export class GeminiService {
 
       ${dimensionsPrompt}
 
-      生成规则：
+      生成规则（必须严格遵守）：
       1. 'label'（标题）、'content'（剧情）、'location'（地点）和变量名称必须使用中文。
       2. 所有节点统一使用 'SCENE' 类型。
       3. 节点分类：
-         - 起始节点：只有出边，没有入边（故事起点）
+         - 起始节点：只有出边，没有入边（故事起点，必须有且仅有1个）
          - 标准剧情节点：既有入边又有出边
-         - 结局节点：只有入边，没有出边（故事终点）
+         - 分支节点：有多个出边的节点（根据分支点数量控制）
+         - 结局节点：只有入边，没有出边（故事终点，数量必须等于结局数量参数！）
          - 随机事件节点：isPoolMember 设为 true（独立的日常/侧边事件）
       4. 'isPoolMember'：布尔值。主线剧情设为 false，随机日常事件设为 true。
       5. 逻辑变量：定义 2-5 个核心变量（如"信任度"、"勇气"），并在 preconditions 和 effects 中合理使用。
       6. 确保 id 唯一。
+      7. 每个分支点必须分出指定数量的选项！
 
       重要：edges 数组中的每个连线必须使用以下格式：
       {

@@ -79,14 +79,15 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
   const [showAiConfig, setShowAiConfig] = useState(false);
   const [showApiSettings, setShowApiSettings] = useState(false);
-  // v0.5: Extended config with random events and tree structure
+  // v0.5.2: Extended config with endings count
   const [aiConfig, setAiConfig] = useState<TreeGenConfig>({
     branchPoints: 3,
     optionsPerNode: 2,
     minDepth: 3,
     maxDepth: 5,
     randomEvents: 0,
-    treeStructure: ''
+    treeStructure: '',
+    endings: 1
   });
   
   // History State
@@ -837,10 +838,15 @@ const App: React.FC = () => {
                     <div>分支点: {aiConfig.branchPoints} <input type="range" min="1" max="10" value={aiConfig.branchPoints} onChange={e => setAiConfig({...aiConfig, branchPoints: +e.target.value})} className="w-full h-1 accent-indigo-500" /></div>
                     <div>层级: {aiConfig.maxDepth} <input type="range" min="1" max="10" value={aiConfig.maxDepth} onChange={e => setAiConfig({...aiConfig, maxDepth: +e.target.value})} className="w-full h-1 accent-indigo-500" /></div>
                   </div>
+                  {/* v0.5.2: Branch options and endings */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>每分支选项: {aiConfig.optionsPerNode || 2} <input type="range" min="1" max="4" value={aiConfig.optionsPerNode || 2} onChange={e => setAiConfig({...aiConfig, optionsPerNode: +e.target.value})} className="w-full h-1 accent-emerald-500" /></div>
+                    <div>结局数量: {aiConfig.endings || 1} <input type="range" min="1" max="6" value={aiConfig.endings || 1} onChange={e => setAiConfig({...aiConfig, endings: +e.target.value})} className="w-full h-1 accent-rose-500" /></div>
+                  </div>
                   {/* v0.5: New options */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>随机事件: {aiConfig.randomEvents || 0} <input type="range" min="0" max="10" value={aiConfig.randomEvents || 0} onChange={e => setAiConfig({...aiConfig, randomEvents: +e.target.value})} className="w-full h-1 accent-purple-500" /></div>
-                    <div className="text-slate-500">日常/支线剧情数量</div>
+                    <div className="text-slate-500 flex items-center">日常/支线剧情</div>
                   </div>
                   <div className="space-y-1">
                     <div className="text-slate-500">树结构描述 (可选):</div>
@@ -848,7 +854,7 @@ const App: React.FC = () => {
                       type="text"
                       value={aiConfig.treeStructure || ''}
                       onChange={e => setAiConfig({...aiConfig, treeStructure: e.target.value})}
-                      placeholder="如：双线并行、多结局、线性叙事..."
+                      placeholder="如：双线并行、三结局、线性叙事..."
                       className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-[10px] focus:outline-none focus:border-indigo-500"
                     />
                   </div>
