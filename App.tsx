@@ -33,7 +33,10 @@ import {
   X,
   Link as LinkIcon,
   Wand2,
-  Settings2
+  Settings2,
+  Download,
+  Upload,
+  FileJson
 } from 'lucide-react';
 import { GeminiService, TreeGenConfig } from './services/geminiService';
 import { OpenAIService } from './services/openaiService';
@@ -43,8 +46,16 @@ const NODE_HEIGHT = 160;
 const TREE_SPACING_X = 350;
 const TREE_SPACING_Y = 220;
 const HISTORY_KEY = 'novascribe_history_v1';
+const SETTINGS_KEY = 'novascribe_settings_v1';
 
 type ViewMode = 'canvas' | 'tree' | 'map' | 'database' | 'history';
+
+interface AppSettings {
+  aiModel: string;
+  aiApiKey: string;
+  aiPrompt: string;
+  aiConfig: TreeGenConfig;
+}
 
 const App: React.FC = () => {
   const [graph, setGraph] = useState<VNGraph>(INITIAL_GRAPH);
@@ -56,8 +67,12 @@ const App: React.FC = () => {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   // v0.3: AI Provider configuration
+  // v0.4: Read default model from environment variable
   const [aiApiKey, setAiApiKey] = useState("");
-  const [aiModel, setAiModel] = useState("gemini-2.5-flash"); // gemini-2.5-flash, gemini-2.5-pro, gpt-4o, etc.
+  const [aiModel, setAiModel] = useState(() => {
+    // Try to get from environment variable, fallback to default
+    return (typeof process !== 'undefined' && process.env.DEFAULT_AI_MODEL) || "gemini-2.5-flash";
+  });
   const [generatingNodeId, setGeneratingNodeId] = useState<string | null>(null);
   const [nodeCustomPrompt, setNodeCustomPrompt] = useState("");
   const [showNodePromptInput, setShowNodePromptInput] = useState(false);
@@ -165,6 +180,95 @@ const App: React.FC = () => {
       setViewMode('tree');
     }
   };
+
+  // v0.4: Export story to JSON file
+  const handleExportStory = useCallback(() => {
+    const exportData = {
+      version: '0.4.0',
+      exportedAt: new Date().toISOString(),
+      graph: graph,
+      aiPrompt: aiPrompt,
+      settings: {
+        aiModel: aiModel,
+        aiConfig: aiConfig
+      }
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `novascribe-story-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [graph, aiPrompt, aiModel, aiConfig]);
+
+  // v0.4: Import story from JSON file
+  const handleImportStory = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const importData = JSON.parse(content);
+
+        // Validate the structure
+        if (!importData.graph || !importData.graph.nodes || !importData.graph.edges) {
+          throw new Error('Invalid story file structure');
+        }
+
+        if (confirm(`确定要导入故事文件吗？当前的故事将被替换。\n\n文件版本: ${importData.version || '未知'}\n导出时间: ${importData.exportedAt || '未知'}`)) {
+          setGraph(importData.graph);
+          if (importData.aiPrompt) setAiPrompt(importData.aiPrompt);
+          if (importData.settings?.aiModel) setAiModel(importData.settings.aiModel);
+          if (importData.settings?.aiConfig) setAiConfig(importData.settings.aiConfig);
+          saveSnapshot('导入故事文件', importData.graph);
+          setViewMode('tree');
+        }
+      } catch (error: any) {
+        alert(`导入失败：${error.message || '文件格式错误'}`);
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so the same file can be imported again
+    event.target.value = '';
+  }, [saveSnapshot]);
+
+  // v0.4: Save settings to localStorage
+  const saveSettings = useCallback(() => {
+    const settings: AppSettings = {
+      aiModel,
+      aiApiKey,
+      aiPrompt,
+      aiConfig
+    };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }, [aiModel, aiApiKey, aiPrompt, aiConfig]);
+
+  // v0.4: Load settings from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(SETTINGS_KEY);
+    if (saved) {
+      try {
+        const settings: AppSettings = JSON.parse(saved);
+        if (settings.aiModel) setAiModel(settings.aiModel);
+        if (settings.aiApiKey) setAiApiKey(settings.aiApiKey);
+        if (settings.aiPrompt) setAiPrompt(settings.aiPrompt);
+        if (settings.aiConfig) setAiConfig(settings.aiConfig);
+      } catch (e) {
+        console.error('Failed to load settings:', e);
+      }
+    }
+  }, []);
+
+  // v0.4: Auto-save settings when they change
+  useEffect(() => {
+    saveSettings();
+  }, [saveSettings]);
 
   // Tree Layout calculation logic
   const treeLayout = useMemo(() => {
@@ -611,8 +715,18 @@ const App: React.FC = () => {
              <button onClick={() => { setViewMode('database'); setSelectedEdgeId(null); }} className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all ${viewMode === 'database' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}><Database size={12} className="inline mr-1" /> DB</button>
           </div>
           <div className="h-6 w-px bg-slate-800" />
-          <button onClick={() => setViewMode('history')} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400"><History size={18}/></button>
-          <button onClick={() => saveSnapshot(`快照 ${new Date().toLocaleTimeString()}`)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400"><Save size={18}/></button>
+          <button onClick={() => setViewMode('history')} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400" title="历史快照"><History size={18}/></button>
+          <button onClick={() => saveSnapshot(`快照 ${new Date().toLocaleTimeString()}`)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400" title="保存快照"><Save size={18}/></button>
+          <button onClick={handleExportStory} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400" title="导出故事"><Download size={18}/></button>
+          <label className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 cursor-pointer" title="导入故事">
+            <Upload size={18}/>
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleImportStory}
+              className="hidden"
+            />
+          </label>
           <div className="h-6 w-px bg-slate-800" />
           <button onClick={() => setIsSimulating(true)} className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg text-sm font-semibold transition-all"><Play size={16} fill="currentColor" className="inline mr-2" /> RUN</button>
         </div>
