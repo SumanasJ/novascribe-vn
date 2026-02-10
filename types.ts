@@ -88,6 +88,9 @@ export interface VNGraph {
     type: EdgeType;
     label?: string;
     weight?: number; // Used by POOL for scheduling
+    // v0.6: Edge-level state conditions and effects
+    conditions?: VNCondition[];   // Preconditions to traverse this edge
+    effects?: VNEffect[];         // Effects applied when traversing edge
   }[];
   variables: VNVariable[];
   pools: {
@@ -105,4 +108,37 @@ export interface HistorySnapshot {
   label: string;
   graph: VNGraph;
   prompt?: string;
+}
+
+// v0.6: State-driven narrative visualization types
+
+// State history snapshot for simulator (tracks runtime state)
+export interface StateSnapshot {
+  id: string;
+  timestamp: number;
+  nodeId: string;              // Current node position
+  variables: VNVariable[];      // Variable states at this point
+  choice?: {                    // Choice made to reach here
+    nodeId: string;
+    optionIndex: number;
+  };
+  label: string;                // Human-readable description
+}
+
+// Narrative conflict detected by conflict detection
+export interface NarrativeConflict {
+  id: string;
+  type: 'unreachable' | 'dead_end' | 'contradictory';
+  severity: 'error' | 'warning' | 'info';
+  nodeIds: string[];
+  edgeIds?: string[];
+  message: string;
+  suggestion?: string;
+}
+
+// State dependency metadata for visualization
+export interface StateDependency {
+  nodeId: string;
+  dependsOn: string[];          // Variable IDs this node reads
+  modifies: string[];           // Variable IDs this node writes
 }

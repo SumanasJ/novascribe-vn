@@ -14,6 +14,17 @@ export interface TreeGenConfig {
 
 export class OpenAIService {
   /**
+   * Helper to get the correct token parameter name for the model
+   */
+  private getTokenParam(model: string): 'max_tokens' | 'max_completion_tokens' {
+    // GPT-5 models use max_completion_tokens
+    if (model?.startsWith('gpt-5')) {
+      return 'max_completion_tokens';
+    }
+    return 'max_tokens';
+  }
+
+  /**
    * Brainstorms a branching narrative structure based on a summary.
    * @param model Optional model name (default: gpt-4o)
    * @param apiKeyParam Optional API key (overrides environment variables)
@@ -99,7 +110,7 @@ export class OpenAIService {
           ],
           response_format: { type: "json_object" },
           temperature: 0.7,
-          max_tokens: 8000
+          [this.getTokenParam(modelName)]: 8000
         });
 
         const text = response.choices[0]?.message?.content;
@@ -257,7 +268,7 @@ export class OpenAIService {
           ],
           response_format: { type: "json_object" },
           temperature: 0.8,
-          max_tokens: 4000
+          [this.getTokenParam(model)]: 4000
         });
 
         const text = response.choices[0]?.message?.content;

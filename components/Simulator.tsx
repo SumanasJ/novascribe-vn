@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { VNGraph, VNNodeData, NodeType, VNVariable, EdgeType, SceneCategory } from '../types';
+import { VNGraph, VNNodeData, NodeType, VNVariable, EdgeType, SceneCategory, StateSnapshot } from '../types';
 import { getSceneCategory } from '../constants';
-import { Play, RotateCcw, ChevronRight, AlertCircle, MapPin, Dice5, Zap } from 'lucide-react';
+import { StateEvaluator } from '../utils/stateEvaluator';
+import { Play, RotateCcw, ChevronRight, AlertCircle, MapPin, Dice5, Zap, ArrowLeft, ArrowRight, History } from 'lucide-react';
 
 interface SimulatorProps {
   graph: VNGraph;
@@ -16,6 +17,24 @@ const Simulator: React.FC<SimulatorProps> = ({ graph, isOpen, onClose }) => {
   const [log, setLog] = useState<string[]>([]);
   const [isProcessingPool, setIsProcessingPool] = useState(false);
 
+  // v0.6: State history tracking
+  const [history, setHistory] = useState<StateSnapshot[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  // Helper to create a snapshot
+  const createSnapshot = (
+    node: VNNodeData,
+    vars: VNVariable[],
+    choice?: { nodeId: string; optionIndex: number }
+  ): StateSnapshot => ({
+    id: `snap-${Date.now()}`,
+    timestamp: Date.now(),
+    nodeId: node.id,
+    variables: StateEvaluator.cloneVariables(vars),
+    choice,
+    label: node.label
+  });
+
   useEffect(() => {
     if (isOpen) reset();
   }, [isOpen]);
@@ -23,30 +42,74 @@ const Simulator: React.FC<SimulatorProps> = ({ graph, isOpen, onClose }) => {
   const reset = () => {
     // v0.2: Find start node dynamically (nodes without incoming edges)
     const startNode = graph.nodes.find(n => getSceneCategory(n.id, graph) === SceneCategory.START);
+    const initialVars = graph.variables.map(v => ({ ...v, currentValue: v.defaultValue }));
+
     setCurrentNode(startNode || null);
-    setSimVariables(graph.variables.map(v => ({ ...v, currentValue: v.defaultValue })));
+    setSimVariables(initialVars);
     setLog(['Timeline initialized.']);
+    setIsProcessingPool(false);
+
+    // v0.6: Initialize history with start node
+    if (startNode) {
+      const initialSnapshot = createSnapshot(startNode, initialVars);
+      setHistory([initialSnapshot]);
+      setHistoryIndex(0);
+    } else {
+      setHistory([]);
+      setHistoryIndex(-1);
+    }
+  };
+
+  const handleNext = (targetId: string, edgeId?: string) => {
+    const nextNode = graph.nodes.find(n => n.id === targetId);
+    const edge = edgeId ? graph.edges.find(e => e.id === edgeId) : undefined;
+
+    if (!nextNode) return;
+
+    // v0.6: Start with current variables, apply edge effects first, then node effects
+    let newVars = StateEvaluator.cloneVariables(simVariables);
+
+    // Apply edge effects if any
+    if (edge?.effects) {
+      newVars = StateEvaluator.applyEffects(edge.effects, newVars);
+      setLog(prev => [...prev, `[Edge Effect] Applied from ${edge.label || 'connection'}`]);
+    }
+
+    // Apply node effects
+    newVars = StateEvaluator.applyEffects(nextNode.effects, newVars);
+
+    setCurrentNode(nextNode);
+    setSimVariables(newVars);
+    setLog(prev => [...prev, `Beat: ${nextNode.label}`]);
+
+    // v0.6: Add to history
+    const newSnapshot = createSnapshot(nextNode, newVars, {
+      nodeId: currentNode?.id || '',
+      optionIndex: 0
+    });
+
+    // Cut off any future history if we branched from a previous state
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newSnapshot);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+
+    // v0.2: Removed POOL handling - all nodes are SCENE now
     setIsProcessingPool(false);
   };
 
-  const handleNext = (targetId: string) => {
-    const nextNode = graph.nodes.find(n => n.id === targetId);
-    if (nextNode) {
-      setCurrentNode(nextNode);
-      const newVars = [...simVariables];
-      nextNode.effects.forEach(eff => {
-        const v = newVars.find(v => v.id === eff.variableId);
-        if (v) {
-          if (eff.operation === 'set') v.currentValue = eff.value;
-          if (eff.operation === 'add') v.currentValue = Number(v.currentValue) + Number(eff.value);
-          if (eff.operation === 'subtract') v.currentValue = Number(v.currentValue) - Number(eff.value);
-          if (eff.operation === 'toggle') v.currentValue = !v.currentValue;
-        }
-      });
-      setSimVariables(newVars);
-      setLog(prev => [...prev, `Beat: ${nextNode.label}`]);
-      // v0.2: Removed POOL handling - all nodes are SCENE now
-      setIsProcessingPool(false);
+  // v0.6: Rewind to a specific history point
+  const rewindTo = (index: number) => {
+    if (index < 0 || index >= history.length) return;
+
+    const snapshot = history[index];
+    const node = graph.nodes.find(n => n.id === snapshot.nodeId);
+
+    if (node) {
+      setCurrentNode(node);
+      setSimVariables(StateEvaluator.cloneVariables(snapshot.variables));
+      setHistoryIndex(index);
+      setLog(prev => [...prev, `[Rewind] Returned to ${snapshot.label}`]);
     }
   };
 
@@ -79,22 +142,18 @@ const Simulator: React.FC<SimulatorProps> = ({ graph, isOpen, onClose }) => {
     .map(e => ({ edge: e, target: graph.nodes.find(n => n.id === e.target) }))
     .filter(conn => {
       if (!conn.target) return false;
-      // Filter by preconditions
-      return conn.target.preconditions.every(cond => {
-        const v = simVariables.find(v => v.id === cond.variableId);
-        if (!v) return true;
-        const curr = v.currentValue;
-        const target = cond.value;
-        switch(cond.operator) {
-          case '==': return curr == target;
-          case '!=': return curr != target;
-          case '>': return Number(curr) > Number(target);
-          case '<': return Number(curr) < Number(target);
-          case '>=': return Number(curr) >= Number(target);
-          case '<=': return Number(curr) <= Number(target);
-          default: return true;
-        }
-      });
+
+      // v0.6: Check node preconditions
+      const nodeConditionsMet = StateEvaluator.evaluateConditions(
+        conn.target.preconditions,
+        simVariables
+      );
+
+      // v0.6: Check edge conditions if they exist
+      const edgeConditionsMet = !conn.edge.conditions ||
+        StateEvaluator.evaluateConditions(conn.edge.conditions, simVariables);
+
+      return nodeConditionsMet && edgeConditionsMet;
     });
 
   // v0.2: All nodes are narrative nodes now (SCENE type)
@@ -114,6 +173,30 @@ const Simulator: React.FC<SimulatorProps> = ({ graph, isOpen, onClose }) => {
             </div>
           </div>
           <div className="flex gap-3">
+            {/* v0.6: Rewind controls */}
+            <button
+              onClick={() => rewindTo(historyIndex - 1)}
+              disabled={historyIndex <= 0}
+              className="p-3 hover:bg-white/10 rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Previous state"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div className="flex items-center gap-2 px-3 bg-slate-800 rounded-2xl">
+              <History size={16} className="text-indigo-400" />
+              <span className="text-xs font-mono text-slate-400">
+                {historyIndex + 1} / {history.length}
+              </span>
+            </div>
+            <button
+              onClick={() => rewindTo(historyIndex + 1)}
+              disabled={historyIndex >= history.length - 1}
+              className="p-3 hover:bg-white/10 rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Next state"
+            >
+              <ArrowRight size={20} />
+            </button>
+            <div className="w-px h-8 bg-white/10" />
             <button onClick={reset} className="p-3 hover:bg-white/10 rounded-2xl transition-all" title="Restart Session"><RotateCcw size={20} /></button>
             <button onClick={onClose} className="px-6 py-2.5 bg-white/5 hover:bg-rose-600/20 text-slate-300 hover:text-rose-400 rounded-2xl font-black text-[10px] tracking-widest transition-all">TERMINATE</button>
           </div>
@@ -166,7 +249,7 @@ const Simulator: React.FC<SimulatorProps> = ({ graph, isOpen, onClose }) => {
                         availableConnections.map((conn, i) => (
                           <button
                             key={i}
-                            onClick={() => handleNext(conn.target!.id)}
+                            onClick={() => handleNext(conn.target!.id, conn.edge.id)}
                             className="flex items-center justify-between p-6 bg-slate-800/80 hover:bg-indigo-600 border border-white/5 hover:border-indigo-400/50 rounded-3xl transition-all group text-left active:scale-[0.98] shadow-lg hover:shadow-indigo-600/20"
                           >
                             <div className="flex items-center gap-4">

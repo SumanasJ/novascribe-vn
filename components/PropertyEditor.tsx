@@ -5,25 +5,72 @@ import { Trash2, Plus, Settings2, MapPin, GitBranch, MessageSquare, Layers, Link
 
 interface PropertyEditorProps {
   node: VNNodeData | null;
-  edge?: { id: string, source: string, target: string, type: any } | null;
+  edge?: { id: string, source: string, target: string, type: any, conditions?: any[], effects?: any[] } | null;
   variables: VNVariable[];
   graph: VNGraph;
   onUpdate: (updated: VNNodeData) => void;
   onDelete: (id: string) => void;
   onDeleteEdge: (id: string) => void;
+  onUpdateEdge?: (edgeId: string, updates: Partial<{ conditions: any[], effects: any[] }>) => void; // v0.6
   onGenerateNode?: (nodeId: string, customPrompt?: string) => Promise<void>;
   isGenerating?: boolean;
 }
 
-const PropertyEditor: React.FC<PropertyEditorProps> = ({ node, edge, variables, graph, onUpdate, onDelete, onDeleteEdge, onGenerateNode, isGenerating }) => {
+const PropertyEditor: React.FC<PropertyEditorProps> = ({ node, edge, variables, graph, onUpdate, onDelete, onDeleteEdge, onUpdateEdge, onGenerateNode, isGenerating }) => {
   const [customPrompt, setCustomPrompt] = React.useState("");
   const [showCustomPrompt, setShowCustomPrompt] = React.useState(false);
+
+  // v0.6: Edge condition/effect handlers
+  const addEdgeCondition = () => {
+    if (variables.length === 0 || !onUpdateEdge || !edge) return;
+    const newCond: any = {
+      variableId: variables[0].id,
+      operator: '==',
+      value: variables[0].type === 'number' ? 0 : variables[0].type === 'boolean' ? true : ''
+    };
+    onUpdateEdge(edge.id, { conditions: [...(edge.conditions || []), newCond] });
+  };
+
+  const updateEdgeCondition = (index: number, updates: Partial<any>) => {
+    if (!onUpdateEdge || !edge) return;
+    const newConditions = [...(edge.conditions || [])];
+    newConditions[index] = { ...newConditions[index], ...updates };
+    onUpdateEdge(edge.id, { conditions: newConditions });
+  };
+
+  const removeEdgeCondition = (index: number) => {
+    if (!onUpdateEdge || !edge) return;
+    onUpdateEdge(edge.id, { conditions: (edge.conditions || []).filter((_, i) => i !== index) });
+  };
+
+  const addEdgeEffect = () => {
+    if (variables.length === 0 || !onUpdateEdge || !edge) return;
+    const newEff: any = {
+      variableId: variables[0].id,
+      operation: variables[0].type === 'boolean' ? 'toggle' : 'set',
+      value: variables[0].type === 'number' ? 1 : ''
+    };
+    onUpdateEdge(edge.id, { effects: [...(edge.effects || []), newEff] });
+  };
+
+  const updateEdgeEffect = (index: number, updates: Partial<any>) => {
+    if (!onUpdateEdge || !edge) return;
+    const newEffects = [...(edge.effects || [])];
+    newEffects[index] = { ...newEffects[index], ...updates };
+    onUpdateEdge(edge.id, { effects: newEffects });
+  };
+
+  const removeEdgeEffect = (index: number) => {
+    if (!onUpdateEdge || !edge) return;
+    onUpdateEdge(edge.id, { effects: (edge.effects || []).filter((_, i) => i !== index) });
+  };
+
   // Edge Selection Case
   if (edge && !node) {
     const sourceNode = graph.nodes.find(n => n.id === edge.source);
     const targetNode = graph.nodes.find(n => n.id === edge.target);
     return (
-      <div className="flex flex-col h-full bg-slate-900 border-l border-slate-800 p-5 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <div className="flex flex-col h-full bg-slate-900 border-l border-slate-800 custom-scrollbar overflow-y-auto p-5 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
         <div className="flex justify-between items-center">
           <h2 className="font-bold text-lg flex items-center gap-2">
             <Link2 size={18} className="text-indigo-400" /> 连线属性
@@ -47,6 +94,103 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ node, edge, variables, 
               <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-1 rounded inline-block">{edge.type}</div>
             </div>
           </div>
+
+          {/* v0.6: Edge Conditions */}
+          <section className="space-y-3 pt-4 border-t border-slate-800/50">
+            <div className="flex justify-between items-center">
+              <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest">连线条件 (Edge Pre-Conditions)</label>
+              <button onClick={addEdgeCondition} disabled={variables.length === 0 || !onUpdateEdge}
+                className="text-[9px] font-black text-amber-500 border border-amber-500/20 px-2 py-1 rounded-lg hover:bg-amber-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                + 条件
+              </button>
+            </div>
+            <p className="text-[9px] text-slate-600 italic">
+              触发此连线需要满足的变量条件（全部满足才能通行）
+            </p>
+            <div className="space-y-2">
+              {(edge.conditions || []).map((cond, i) => (
+                <div key={i} className="bg-slate-950/40 p-2 rounded-xl border border-slate-800 flex items-center gap-2">
+                  <select
+                    value={cond.variableId}
+                    onChange={(e) => updateEdgeCondition(i, { variableId: e.target.value })}
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold"
+                  >
+                    {variables.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  <select
+                    value={cond.operator}
+                    onChange={(e) => updateEdgeCondition(i, { operator: e.target.value as any })}
+                    className="w-10 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-[10px]"
+                  >
+                    <option value="==">==</option>
+                    <option value="!=">!=</option>
+                    <option value=">">&gt;</option>
+                    <option value="<">&lt;</option>
+                    <option value=">=">&gt;=</option>
+                    <option value="<=">&lt;=</option>
+                  </select>
+                  <input
+                    type="text" value={cond.value}
+                    onChange={(e) => updateEdgeCondition(i, { value: e.target.value })}
+                    className="w-10 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-[10px] text-center"
+                  />
+                  <button onClick={() => removeEdgeCondition(i)} className="text-rose-400 hover:text-rose-300"><Trash2 size={12}/></button>
+                </div>
+              ))}
+              {(edge.conditions || []).length === 0 && (
+                <div className="text-[10px] text-slate-600 italic text-center py-2">无条件（始终可通行）</div>
+              )}
+            </div>
+          </section>
+
+          {/* v0.6: Edge Effects */}
+          <section className="space-y-3 pt-4 border-t border-slate-800/50">
+            <div className="flex justify-between items-center">
+              <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">连线效果 (Edge Effects)</label>
+              <button onClick={addEdgeEffect} disabled={variables.length === 0 || !onUpdateEdge}
+                className="text-[9px] font-black text-emerald-500 border border-emerald-500/20 px-2 py-1 rounded-lg hover:bg-emerald-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                + 效果
+              </button>
+            </div>
+            <p className="text-[9px] text-slate-600 italic">
+              通行此连线时对变量产生的影响
+            </p>
+            <div className="space-y-2">
+              {(edge.effects || []).map((eff, i) => (
+                <div key={i} className="bg-slate-950/40 p-2 rounded-xl border border-slate-800 flex items-center gap-2">
+                  <select
+                    value={eff.variableId}
+                    onChange={(e) => updateEdgeEffect(i, { variableId: e.target.value })}
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold"
+                  >
+                    {variables.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  <select
+                    value={eff.operation}
+                    onChange={(e) => updateEdgeEffect(i, { operation: e.target.value as any })}
+                    className="w-12 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-[10px]"
+                  >
+                    <option value="set">SET</option>
+                    <option value="add">ADD</option>
+                    <option value="subtract">SUB</option>
+                    <option value="toggle">TOG</option>
+                  </select>
+                  {eff.operation !== 'toggle' && (
+                    <input
+                      type="text" value={eff.value}
+                      onChange={(e) => updateEdgeEffect(i, { value: e.target.value })}
+                      className="w-10 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-[10px] text-center"
+                    />
+                  )}
+                  <button onClick={() => removeEdgeEffect(i)} className="text-rose-400 hover:text-rose-300"><Trash2 size={12}/></button>
+                </div>
+              ))}
+              {(edge.effects || []).length === 0 && (
+                <div className="text-[10px] text-slate-600 italic text-center py-2">无效果</div>
+              )}
+            </div>
+          </section>
+
           <p className="text-[10px] text-slate-500 italic text-center px-4">
             连线定义了剧情的流向，可在画布模式下通过拖拽圆点进行重连，或按 Delete 键删除。
           </p>
