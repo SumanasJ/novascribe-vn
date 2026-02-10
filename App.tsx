@@ -55,6 +55,7 @@ interface AppSettings {
   aiApiKey: string;
   aiPrompt: string;
   aiConfig: TreeGenConfig;
+  graph?: VNGraph; // v0.5.3: Save current graph state
 }
 
 const App: React.FC = () => {
@@ -262,17 +263,20 @@ const App: React.FC = () => {
   }, [saveSnapshot]);
 
   // v0.4: Save settings to localStorage
+  // v0.5.3: Also save graph state
   const saveSettings = useCallback(() => {
     const settings: AppSettings = {
       aiModel,
       aiApiKey,
       aiPrompt,
-      aiConfig
+      aiConfig,
+      graph // v0.5.3: Save current graph
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  }, [aiModel, aiApiKey, aiPrompt, aiConfig]);
+  }, [aiModel, aiApiKey, aiPrompt, aiConfig, graph]);
 
   // v0.4: Load settings from localStorage on mount
+  // v0.5.3: Also load graph state
   useEffect(() => {
     const saved = localStorage.getItem(SETTINGS_KEY);
     if (saved) {
@@ -282,6 +286,18 @@ const App: React.FC = () => {
         if (settings.aiApiKey) setAiApiKey(settings.aiApiKey);
         if (settings.aiPrompt) setAiPrompt(settings.aiPrompt);
         if (settings.aiConfig) setAiConfig(settings.aiConfig);
+        // v0.5.3: Load saved graph if available
+        if (settings.graph) {
+          // Normalize edges for backward compatibility (from/to -> source/target)
+          const normalizedEdges = (settings.graph.edges || []).map((e: any, i: number) => ({
+            id: e.id || `edge-${Date.now()}-${i}`,
+            source: e.source || e.from,
+            target: e.target || e.to,
+            type: e.type || 'FLOW',
+            label: e.label || undefined
+          })).filter((e: any) => e.source && e.target);
+          setGraph({ ...settings.graph, edges: normalizedEdges });
+        }
       } catch (e) {
         console.error('Failed to load settings:', e);
       }
