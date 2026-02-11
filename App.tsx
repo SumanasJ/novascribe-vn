@@ -443,18 +443,15 @@ const App: React.FC = () => {
     if (['map', 'database', 'history'].includes(viewMode)) return;
 
     // v0.5.5: Touchpad/mouse wheel handling
-    // Ctrl + wheel = zoom
-    // Plain wheel/touchpad = pan (touchpad has deltaX, mouse wheel usually doesn't)
+    // Ctrl/Cmd + wheel = zoom
+    // Plain wheel/touchpad = pan
     if (e.ctrlKey || e.metaKey) {
       // Zoom with Ctrl/Cmd + wheel
-      e.preventDefault();
-      const delta = -e.deltaY * 0.002;
+      const delta = -e.deltaY * 0.005;
       const newZoom = Math.min(Math.max(zoom + delta, 0.3), 3);
       setZoom(newZoom);
     } else {
       // Pan with touchpad or plain wheel
-      // Touchpad: has both deltaX and deltaY (two-finger scroll)
-      // Mouse wheel: usually only deltaY, we still pan for consistency
       setPan(p => ({
         x: p.x - e.deltaX,
         y: p.y - e.deltaY
