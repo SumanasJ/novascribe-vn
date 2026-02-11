@@ -692,7 +692,8 @@ const App: React.FC = () => {
   const renderDraftEdge = () => {
     if (!connectingSourceId || !canvasRef.current) return null;
     const source = graph.nodes.find(n => n.id === connectingSourceId);
-    const pos = viewMode === 'tree' ? treeLayout[connectingSourceId] : source?.position;
+    // v0.5.5: Prefer node's own position, fall back to treeLayout
+    const pos = source?.position || (viewMode === 'tree' ? treeLayout[connectingSourceId] : null);
     if (!pos) return null;
     const rect = canvasRef.current.getBoundingClientRect();
     const startX = pos.x + NODE_WIDTH;
@@ -707,8 +708,9 @@ const App: React.FC = () => {
       const source = graph.nodes.find(n => n.id === edge.source);
       const target = graph.nodes.find(n => n.id === edge.target);
       if (!source || !target) return null;
-      const sPos = viewMode === 'tree' ? treeLayout[source.id] : source.position;
-      const tPos = viewMode === 'tree' ? treeLayout[target.id] : target.position;
+      // v0.5.5: Prefer node's own position, fall back to treeLayout
+      const sPos = source.position || (viewMode === 'tree' ? treeLayout[source.id] : null);
+      const tPos = target.position || (viewMode === 'tree' ? treeLayout[target.id] : null);
       if (!sPos || !tPos) return null;
 
       const startX = sPos.x + NODE_WIDTH;
@@ -759,18 +761,16 @@ const App: React.FC = () => {
             title="拖拽以重新连接目标节点"
           />
 
-          {/* Edge Delete Button (Only visible when selected) */}
-          {isSelected && (
-            <g
-              transform={`translate(${midX}, ${midY})`}
-              className="cursor-pointer pointer-events-auto"
-              onClick={(e) => { e.stopPropagation(); handleDeleteEdge(edge.id); }}
-            >
-              <circle r="15" fill="#e11d48" className="shadow-2xl" />
-              <line x1="-5" y1="-5" x2="5" y2="5" stroke="white" strokeWidth="3" />
-              <line x1="-5" y1="5" x2="5" y2="-5" stroke="white" strokeWidth="3" />
-            </g>
-          )}
+          {/* Edge Delete Button - visible on hover or when selected */}
+          <g
+            transform={`translate(${midX}, ${midY})`}
+            className={`cursor-pointer pointer-events-auto transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+            onClick={(e) => { e.stopPropagation(); handleDeleteEdge(edge.id); }}
+          >
+            <circle r="12" fill="#e11d48" className="hover:r-[14] transition-all" />
+            <line x1="-4" y1="-4" x2="4" y2="4" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="-4" y1="4" x2="4" y2="-4" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+          </g>
         </g>
       );
     });
@@ -976,7 +976,9 @@ const App: React.FC = () => {
                   {renderDraftEdge()}
                 </svg>
                 {graph.nodes.map((node) => {
-                  const pos = viewMode === 'tree' ? treeLayout[node.id] : node.position;
+                  // v0.5.5: Prefer node's own position if it exists (for newly added nodes)
+                  // Fall back to treeLayout in tree view, or skip if no position
+                  const pos = node.position || (viewMode === 'tree' ? treeLayout[node.id] : null);
                   if (!pos) return null;
                   const isSelected = selectedNodeId === node.id;
 
@@ -1113,6 +1115,21 @@ const App: React.FC = () => {
         {/* v0.5.5: Floating Panel Toggle Buttons */}
         <div className="absolute top-4 left-4 z-50 flex gap-2">
           <button
+            onClick={() => {
+              // Add node at center of current viewport
+              const viewportCenterX = (-pan.x / zoom) + (canvasRef.current?.clientWidth || 800) / 2 / zoom;
+              const viewportCenterY = (-pan.y / zoom) + (canvasRef.current?.clientHeight || 600) / 2 / zoom;
+              // Add some random offset to avoid overlapping
+              const offsetX = (Math.random() - 0.5) * 100;
+              const offsetY = (Math.random() - 0.5) * 100;
+              handleAddNode(NodeType.SCENE, undefined, { x: viewportCenterX + offsetX, y: viewportCenterY + offsetY });
+            }}
+            className="p-3 rounded-xl transition-all shadow-lg bg-emerald-600 text-white hover:bg-emerald-500"
+            title="添加剧情节点 (在当前视野中心)"
+          >
+            <Plus size={20} />
+          </button>
+          <button
             onClick={() => setShowLeftPanel(!showLeftPanel)}
             className={`p-3 rounded-xl transition-all shadow-lg ${
               showLeftPanel
@@ -1175,6 +1192,10 @@ const App: React.FC = () => {
                     <span className="font-bold text-sm uppercase tracking-wider">界面按钮 (左上角)</span>
                   </div>
                   <div className="grid gap-2 pl-6 text-sm">
+                    <div className="flex items-center gap-3">
+                      <Plus size={16} className="text-emerald-500" />
+                      <span className="text-slate-400">添加节点 - 在当前视野中心创建新节点</span>
+                    </div>
                     <div className="flex items-center gap-3">
                       <PanelLeftOpen size={16} className="text-slate-500" />
                       <span className="text-slate-400">工具面板 - 节点、AI引擎、变量管理</span>
