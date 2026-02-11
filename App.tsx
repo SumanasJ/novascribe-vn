@@ -441,14 +441,24 @@ const App: React.FC = () => {
 
   const handleWheel = (e: React.WheelEvent) => {
     if (['map', 'database', 'history'].includes(viewMode)) return;
-    // v0.5.5: Direct zoom with wheel, pan with Shift+wheel
-    if (e.shiftKey) {
-      setPan(p => ({ x: p.x - e.deltaY, y: p.y - e.deltaX }));
-    } else {
-      // Zoom towards cursor position
+
+    // v0.5.5: Touchpad/mouse wheel handling
+    // Ctrl + wheel = zoom
+    // Plain wheel/touchpad = pan (touchpad has deltaX, mouse wheel usually doesn't)
+    if (e.ctrlKey || e.metaKey) {
+      // Zoom with Ctrl/Cmd + wheel
+      e.preventDefault();
       const delta = -e.deltaY * 0.002;
       const newZoom = Math.min(Math.max(zoom + delta, 0.3), 3);
       setZoom(newZoom);
+    } else {
+      // Pan with touchpad or plain wheel
+      // Touchpad: has both deltaX and deltaY (two-finger scroll)
+      // Mouse wheel: usually only deltaY, we still pan for consistency
+      setPan(p => ({
+        x: p.x - e.deltaX,
+        y: p.y - e.deltaY
+      }));
     }
   };
 
@@ -1191,7 +1201,11 @@ const App: React.FC = () => {
                   </div>
                   <div className="grid gap-1.5 pl-6 text-sm">
                     <div className="flex items-center gap-3">
-                      <kbd className="px-2 py-0.5 bg-slate-800 rounded text-xs font-mono">滚轮</kbd>
+                      <kbd className="px-2 py-0.5 bg-slate-800 rounded text-xs font-mono">滚轮/触控板</kbd>
+                      <span className="text-slate-400">平移画布</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <kbd className="px-2 py-0.5 bg-slate-800 rounded text-xs font-mono">Ctrl + 滚轮</kbd>
                       <span className="text-slate-400">缩放画布 (0.3x - 3x)</span>
                     </div>
                     <div className="flex items-center gap-3">
