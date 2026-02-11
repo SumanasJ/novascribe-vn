@@ -1145,115 +1145,151 @@ const App: React.FC = () => {
         {/* v0.5.5: Help Panel */}
         {showHelp && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowHelp(false)}>
-            <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between p-6 border-b border-slate-700">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-5 border-b border-slate-700 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
                     <HelpCircle size={20} className="text-white" />
                   </div>
                   <div>
                     <h2 className="font-bold text-lg">操作说明</h2>
-                    <p className="text-xs text-slate-500">NovaScribe VN Architect 快速入门指南</p>
+                    <p className="text-xs text-slate-500">NovaScribe VN Architect 快速入门</p>
                   </div>
                 </div>
                 <button onClick={() => setShowHelp(false)} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
                   <X size={20} className="text-slate-400" />
                 </button>
               </div>
-              <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
-                {/* 鼠标操作 */}
-                <div className="space-y-3">
+              <div className="p-5 overflow-y-auto custom-scrollbar space-y-4 flex-1">
+                {/* 界面按钮 */}
+                <div className="space-y-2">
                   <div className="flex items-center gap-2 text-indigo-400">
+                    <Layers size={16} />
+                    <span className="font-bold text-sm uppercase tracking-wider">界面按钮 (左上角)</span>
+                  </div>
+                  <div className="grid gap-2 pl-6 text-sm">
+                    <div className="flex items-center gap-3">
+                      <PanelLeftOpen size={16} className="text-slate-500" />
+                      <span className="text-slate-400">工具面板 - 节点、AI引擎、变量管理</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <PanelRightOpen size={16} className="text-slate-500" />
+                      <span className="text-slate-400">属性编辑器 - 编辑选中节点的属性</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <HelpCircle size={16} className="text-slate-500" />
+                      <span className="text-slate-400">操作说明 - 显示本帮助面板</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 鼠标操作 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-400">
                     <MousePointer2 size={16} />
                     <span className="font-bold text-sm uppercase tracking-wider">鼠标操作</span>
                   </div>
-                  <div className="grid gap-2 pl-6">
-                    <div className="flex items-center gap-3 text-sm">
-                      <kbd className="px-2 py-1 bg-slate-800 rounded text-xs font-mono">左键拖拽空白</kbd>
-                      <span className="text-slate-400">平移画布</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm">
-                      <kbd className="px-2 py-1 bg-slate-800 rounded text-xs font-mono">滚轮</kbd>
+                  <div className="grid gap-1.5 pl-6 text-sm">
+                    <div className="flex items-center gap-3">
+                      <kbd className="px-2 py-0.5 bg-slate-800 rounded text-xs font-mono">滚轮</kbd>
                       <span className="text-slate-400">缩放画布 (0.3x - 3x)</span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
-                      <kbd className="px-2 py-1 bg-slate-800 rounded text-xs font-mono">左键点击节点</kbd>
-                      <span className="text-slate-400">选中并打开属性编辑器</span>
+                    <div className="flex items-center gap-3">
+                      <kbd className="px-2 py-0.5 bg-slate-800 rounded text-xs font-mono">左键拖拽空白</kbd>
+                      <span className="text-slate-400">平移画布</span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
-                      <kbd className="px-2 py-1 bg-slate-800 rounded text-xs font-mono">拖拽节点端口</kbd>
+                    <div className="flex items-center gap-3">
+                      <kbd className="px-2 py-0.5 bg-slate-800 rounded text-xs font-mono">左键点击节点</kbd>
+                      <span className="text-slate-400">选中节点，打开属性编辑器</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <kbd className="px-2 py-0.5 bg-slate-800 rounded text-xs font-mono">拖拽节点端口</kbd>
                       <span className="text-slate-400">创建节点连线</span>
                     </div>
                   </div>
                 </div>
 
                 {/* 键盘快捷键 */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-emerald-400">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-amber-400">
                     <Keyboard size={16} />
                     <span className="font-bold text-sm uppercase tracking-wider">键盘快捷键</span>
                   </div>
-                  <div className="grid gap-2 pl-6">
-                    <div className="flex items-center gap-3 text-sm">
-                      <kbd className="px-2 py-1 bg-slate-800 rounded text-xs font-mono">Delete / Backspace</kbd>
+                  <div className="grid gap-1.5 pl-6 text-sm">
+                    <div className="flex items-center gap-3">
+                      <kbd className="px-2 py-0.5 bg-slate-800 rounded text-xs font-mono">Delete</kbd>
                       <span className="text-slate-400">删除选中的节点或连线</span>
                     </div>
                   </div>
                 </div>
 
-                {/* 功能说明 */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-amber-400">
-                    <Zap size={16} />
-                    <span className="font-bold text-sm uppercase tracking-wider">核心功能</span>
+                {/* 视图切换 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-cyan-400">
+                    <GitGraph size={16} />
+                    <span className="font-bold text-sm uppercase tracking-wider">视图模式 (顶部切换)</span>
                   </div>
-                  <div className="grid gap-3 pl-6">
-                    <div className="text-sm">
-                      <span className="font-bold text-slate-300">Tree / Canvas 视图</span>
-                      <p className="text-slate-500 text-xs mt-1">自动树状布局 vs 自由画布布局，可随时切换</p>
+                  <div className="grid gap-1.5 pl-6 text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="text-slate-300 font-medium">Tree</span>
+                      <span className="text-slate-400">自动树状布局</span>
                     </div>
-                    <div className="text-sm">
-                      <span className="font-bold text-slate-300">AI 剧情引擎</span>
-                      <p className="text-slate-500 text-xs mt-1">输入故事梗概，自动生成完整的叙事树结构</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-slate-300 font-medium">Canvas</span>
+                      <span className="text-slate-400">自由画布布局</span>
                     </div>
-                    <div className="text-sm">
-                      <span className="font-bold text-slate-300">模拟器 (RUN)</span>
-                      <p className="text-slate-500 text-xs mt-1">实时预览玩家体验流程，测试变量和条件</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-slate-300 font-medium">Map</span>
+                      <span className="text-slate-400">按地点分组</span>
                     </div>
-                    <div className="text-sm">
-                      <span className="font-bold text-slate-300">变量系统</span>
-                      <p className="text-slate-500 text-xs mt-1">支持布尔、数值、字符串变量，用于条件和效果</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-slate-300 font-medium">DB</span>
+                      <span className="text-slate-400">数据库表格视图</span>
                     </div>
                   </div>
                 </div>
 
-                {/* 节点类型 */}
-                <div className="space-y-3">
+                {/* 节点分类 */}
+                <div className="space-y-2">
                   <div className="flex items-center gap-2 text-fuchsia-400">
-                    <GitGraph size={16} />
+                    <Zap size={16} />
                     <span className="font-bold text-sm uppercase tracking-wider">节点分类 (自动识别)</span>
                   </div>
-                  <div className="grid gap-2 pl-6">
-                    <div className="flex items-center gap-3 text-sm">
+                  <div className="grid gap-1.5 pl-6 text-sm">
+                    <div className="flex items-center gap-3">
                       <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-xs font-bold">START</span>
-                      <span className="text-slate-400">起始节点 - 只有出边无入边</span>
+                      <span className="text-slate-400">起始节点 - 只有出边</span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
+                    <div className="flex items-center gap-3">
                       <span className="px-2 py-0.5 bg-rose-500/20 text-rose-400 rounded text-xs font-bold">END</span>
-                      <span className="text-slate-400">结局节点 - 只有入边无出边</span>
+                      <span className="text-slate-400">结局节点 - 只有入边</span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
+                    <div className="flex items-center gap-3">
                       <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs font-bold">STANDARD</span>
                       <span className="text-slate-400">普通节点 - 有入边和出边</span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
+                    <div className="flex items-center gap-3">
                       <span className="px-2 py-0.5 bg-slate-500/20 text-slate-400 rounded text-xs font-bold">FREE</span>
                       <span className="text-slate-400">孤立节点 - 无任何连接</span>
                     </div>
                   </div>
                 </div>
+
+                {/* 工作流程 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-rose-400">
+                    <Sparkles size={16} />
+                    <span className="font-bold text-sm uppercase tracking-wider">快速开始</span>
+                  </div>
+                  <div className="pl-6 text-sm text-slate-400 space-y-1">
+                    <p>1. 打开工具面板 → 配置 AI 模型和 API Key</p>
+                    <p>2. 输入故事梗概 → 点击"生成剧情"</p>
+                    <p>3. 点击节点 → 在属性编辑器中修改内容</p>
+                    <p>4. 点击 RUN → 测试故事流程</p>
+                  </div>
+                </div>
               </div>
-              <div className="p-4 border-t border-slate-700 flex justify-end">
+              <div className="p-4 border-t border-slate-700 flex justify-end flex-shrink-0">
                 <button
                   onClick={() => setShowHelp(false)}
                   className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold transition-colors"
