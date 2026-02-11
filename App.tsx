@@ -36,7 +36,17 @@ import {
   Settings2,
   Download,
   Upload,
-  FileJson
+  FileJson,
+  PanelLeftOpen,
+  PanelLeftClose,
+  PanelRightOpen,
+  PanelRightClose,
+  Layers,
+  Variable,
+  HelpCircle,
+  MousePointer2,
+  Scroll,
+  Keyboard
 } from 'lucide-react';
 import { GeminiService, TreeGenConfig } from './services/geminiService';
 import { OpenAIService } from './services/openaiService';
@@ -97,13 +107,17 @@ const App: React.FC = () => {
   // Viewport State
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  
+
   // Interaction State
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [connectingSourceId, setConnectingSourceId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  // v0.5.5: Panel visibility state for floating UI
+  const [showLeftPanel, setShowLeftPanel] = useState(false);
+  const [showRightPanel, setShowRightPanel] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   
   // Create service instances with dynamic API key
   const gemini = useMemo(() => new GeminiService(), []);
@@ -427,8 +441,15 @@ const App: React.FC = () => {
 
   const handleWheel = (e: React.WheelEvent) => {
     if (['map', 'database', 'history'].includes(viewMode)) return;
-    if (e.ctrlKey) setZoom(z => Math.min(Math.max(z - e.deltaY * 0.001, 0.3), 2));
-    else setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
+    // v0.5.5: Direct zoom with wheel, pan with Shift+wheel
+    if (e.shiftKey) {
+      setPan(p => ({ x: p.x - e.deltaY, y: p.y - e.deltaX }));
+    } else {
+      // Zoom towards cursor position
+      const delta = -e.deltaY * 0.002;
+      const newZoom = Math.min(Math.max(zoom + delta, 0.3), 3);
+      setZoom(newZoom);
+    }
   };
 
   const startConnection = (id: string, e: React.MouseEvent) => {
@@ -804,122 +825,125 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <aside className="w-72 border-r border-slate-800 bg-slate-900/40 backdrop-blur-sm flex flex-col z-30 overflow-y-auto custom-scrollbar">
-          <NodePalette onAddNode={handleAddNode} />
-          <div className="p-4 border-t border-slate-800 space-y-4">
-             <div className="bg-indigo-900/10 border border-indigo-500/20 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between text-indigo-400">
-                <div className="flex items-center gap-2"><Sparkles size={16} /><span className="text-[10px] font-bold uppercase">AI 剧情引擎</span></div>
-                <div className="flex gap-1">
-                  <button onClick={() => setShowApiSettings(!showApiSettings)} className="p-1 hover:bg-white/10 rounded" title="API 设置"><Settings2 size={14}/></button>
-                  <button onClick={() => setShowAiConfig(!showAiConfig)} className="p-1 hover:bg-white/10 rounded">{showAiConfig ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</button>
-                </div>
+        {/* v0.5.5: Floating Left Panel - Tools & AI Engine */}
+        {showLeftPanel && (
+          <div className="absolute left-0 top-0 bottom-0 w-80 bg-slate-900/95 backdrop-blur-xl border-r border-slate-800 z-40 flex flex-col overflow-y-auto custom-scrollbar shadow-2xl animate-in slide-in-from-left duration-300">
+            <div className="flex items-center justify-between p-4 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-slate-400">
+                <Layers size={16} />
+                <span className="text-xs font-bold uppercase tracking-wider">工具面板</span>
               </div>
-
-              {/* API Settings Panel */}
-              {showApiSettings && (
-                <div className="space-y-3 p-3 bg-slate-950/50 rounded-lg border border-slate-700">
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">AI 模型</label>
-                    <select
-                      value={aiModel}
-                      onChange={(e) => setAiModel(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500"
-                    >
-                      <optgroup label="Gemini (Google)">
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                      </optgroup>
-                      <optgroup label="GPT-4 (OpenAI)">
-                        <option value="gpt-4o">GPT-4o</option>
-                        <option value="gpt-4o-mini">GPT-4o Mini</option>
-                      </optgroup>
-                      <optgroup label="GPT-5 (OpenAI)">
-                        <option value="gpt-5.2">GPT-5.2</option>
-                        <option value="gpt-5.2-pro">GPT-5.2 Pro</option>
-                        <option value="gpt-5.2-codex">GPT-5.2 Codex</option>
-                        <option value="gpt-5-mini">GPT-5 Mini</option>
-                        <option value="gpt-5-nano">GPT-5 Nano</option>
-                      </optgroup>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">API Key (可选)</label>
-                    <input
-                      type="password"
-                      value={aiApiKey}
-                      onChange={(e) => setAiApiKey(e.target.value)}
-                      placeholder="留空使用环境变量"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
-                    />
-                  </div>
-                  <div className="text-[9px] text-slate-600 italic">
-                    当前模型: <span className="text-indigo-400 font-bold">{aiModel}</span>
-                  </div>
-                </div>
-              )}
-
-              {showAiConfig && (
-                <div className="space-y-3 text-xs">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>分支点: {aiConfig.branchPoints} <input type="range" min="1" max="10" value={aiConfig.branchPoints} onChange={e => setAiConfig({...aiConfig, branchPoints: +e.target.value})} className="w-full h-1 accent-indigo-500" /></div>
-                    <div>层级: {aiConfig.maxDepth} <input type="range" min="1" max="10" value={aiConfig.maxDepth} onChange={e => setAiConfig({...aiConfig, maxDepth: +e.target.value})} className="w-full h-1 accent-indigo-500" /></div>
-                  </div>
-                  {/* v0.5.2: Branch options and endings */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>每分支选项: {aiConfig.optionsPerNode || 2} <input type="range" min="1" max="4" value={aiConfig.optionsPerNode || 2} onChange={e => setAiConfig({...aiConfig, optionsPerNode: +e.target.value})} className="w-full h-1 accent-emerald-500" /></div>
-                    <div>结局数量: {aiConfig.endings || 1} <input type="range" min="1" max="6" value={aiConfig.endings || 1} onChange={e => setAiConfig({...aiConfig, endings: +e.target.value})} className="w-full h-1 accent-rose-500" /></div>
-                  </div>
-                  {/* v0.5: New options */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>随机事件: {aiConfig.randomEvents || 0} <input type="range" min="0" max="10" value={aiConfig.randomEvents || 0} onChange={e => setAiConfig({...aiConfig, randomEvents: +e.target.value})} className="w-full h-1 accent-purple-500" /></div>
-                    <div className="text-slate-500 flex items-center">日常/支线剧情</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-slate-500">树结构描述 (可选):</div>
-                    <input
-                      type="text"
-                      value={aiConfig.treeStructure || ''}
-                      onChange={e => setAiConfig({...aiConfig, treeStructure: e.target.value})}
-                      placeholder="如：双线并行、三结局、线性叙事..."
-                      className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-[10px] focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-              )}
-              <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="输入剧情梗概..." className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs h-24 focus:outline-none focus:border-indigo-500 resize-none" />
-              <button onClick={handleBrainstorm} disabled={isBrainstorming || !aiPrompt} className="w-full bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2">
-                {isBrainstorming ? <RefreshCw className="animate-spin" size={14} /> : <BrainCircuit size={14} />} 生成剧情
+              <button onClick={() => setShowLeftPanel(false)} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                <X size={16} />
               </button>
-              {/* Error message display */}
-              {aiError && (
-                <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-xs text-red-300">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle size={12} />
-                    <span className="font-bold">错误</span>
-                  </div>
-                  <p className="mt-1">{aiError}</p>
-                </div>
-              )}
             </div>
+            <NodePalette onAddNode={handleAddNode} />
+            <div className="p-4 border-t border-slate-800 space-y-4">
+               <div className="bg-indigo-900/10 border border-indigo-500/20 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between text-indigo-400">
+                  <div className="flex items-center gap-2"><Sparkles size={16} /><span className="text-[10px] font-bold uppercase">AI 剧情引擎</span></div>
+                  <div className="flex gap-1">
+                    <button onClick={() => setShowApiSettings(!showApiSettings)} className="p-1 hover:bg-white/10 rounded" title="API 设置"><Settings2 size={14}/></button>
+                    <button onClick={() => setShowAiConfig(!showAiConfig)} className="p-1 hover:bg-white/10 rounded">{showAiConfig ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</button>
+                  </div>
+                </div>
+
+                {/* API Settings Panel */}
+                {showApiSettings && (
+                  <div className="space-y-3 p-3 bg-slate-950/50 rounded-lg border border-slate-700">
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">AI 模型</label>
+                      <select
+                        value={aiModel}
+                        onChange={(e) => setAiModel(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500"
+                      >
+                        <optgroup label="Gemini (Google)">
+                          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        </optgroup>
+                        <optgroup label="GPT-4 (OpenAI)">
+                          <option value="gpt-4o">GPT-4o</option>
+                          <option value="gpt-4o-mini">GPT-4o Mini</option>
+                        </optgroup>
+                        <optgroup label="GPT-5 (OpenAI)">
+                          <option value="gpt-5.2">GPT-5.2</option>
+                          <option value="gpt-5.2-pro">GPT-5.2 Pro</option>
+                          <option value="gpt-5.2-codex">GPT-5.2 Codex</option>
+                          <option value="gpt-5-mini">GPT-5 Mini</option>
+                          <option value="gpt-5-nano">GPT-5 Nano</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">API Key (可选)</label>
+                      <input
+                        type="password"
+                        value={aiApiKey}
+                        onChange={(e) => setAiApiKey(e.target.value)}
+                        placeholder="留空使用环境变量"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
+                      />
+                    </div>
+                    <div className="text-[9px] text-slate-600 italic">
+                      当前模型: <span className="text-indigo-400 font-bold">{aiModel}</span>
+                    </div>
+                  </div>
+                )}
+
+                {showAiConfig && (
+                  <div className="space-y-3 text-xs">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>分支点: {aiConfig.branchPoints} <input type="range" min="1" max="10" value={aiConfig.branchPoints} onChange={e => setAiConfig({...aiConfig, branchPoints: +e.target.value})} className="w-full h-1 accent-indigo-500" /></div>
+                      <div>层级: {aiConfig.maxDepth} <input type="range" min="1" max="10" value={aiConfig.maxDepth} onChange={e => setAiConfig({...aiConfig, maxDepth: +e.target.value})} className="w-full h-1 accent-indigo-500" /></div>
+                    </div>
+                    {/* v0.5.2: Branch options and endings */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>每分支选项: {aiConfig.optionsPerNode || 2} <input type="range" min="1" max="4" value={aiConfig.optionsPerNode || 2} onChange={e => setAiConfig({...aiConfig, optionsPerNode: +e.target.value})} className="w-full h-1 accent-emerald-500" /></div>
+                      <div>结局数量: {aiConfig.endings || 1} <input type="range" min="1" max="6" value={aiConfig.endings || 1} onChange={e => setAiConfig({...aiConfig, endings: +e.target.value})} className="w-full h-1 accent-rose-500" /></div>
+                    </div>
+                    {/* v0.5: New options */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>随机事件: {aiConfig.randomEvents || 0} <input type="range" min="0" max="10" value={aiConfig.randomEvents || 0} onChange={e => setAiConfig({...aiConfig, randomEvents: +e.target.value})} className="w-full h-1 accent-purple-500" /></div>
+                      <div className="text-slate-500 flex items-center">日常/支线剧情</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-slate-500">树结构描述 (可选):</div>
+                      <input
+                        type="text"
+                        value={aiConfig.treeStructure || ''}
+                        onChange={e => setAiConfig({...aiConfig, treeStructure: e.target.value})}
+                        placeholder="如：双线并行、三结局、线性叙事..."
+                        className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-[10px] focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                )}
+                <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="输入剧情梗概..." className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs h-24 focus:outline-none focus:border-indigo-500 resize-none" />
+                <button onClick={handleBrainstorm} disabled={isBrainstorming || !aiPrompt} className="w-full bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2">
+                  {isBrainstorming ? <RefreshCw className="animate-spin" size={14} /> : <BrainCircuit size={14} />} 生成剧情
+                </button>
+                {/* Error message display */}
+                {aiError && (
+                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-xs text-red-300">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={12} />
+                      <span className="font-bold">错误</span>
+                    </div>
+                    <p className="mt-1">{aiError}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* 变量管理器 - 滚动到底部可见 */}
+            <VariableManager variables={graph.variables} onUpdate={(vars) => setGraph(g => ({ ...g, variables: vars }))} />
           </div>
-          {/* 变量管理器 - 滚动到底部可见 */}
-          <VariableManager variables={graph.variables} onUpdate={(vars) => setGraph(g => ({ ...g, variables: vars }))} />
-        </aside>
+        )}
 
         <section
           ref={canvasRef}
           className="flex-1 relative bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:32px_32px] overflow-hidden cursor-grab active:cursor-grabbing"
           onWheel={handleWheel}
-          onMouseDown={(e) => {
-            // Start panning if clicking on empty space (not on a node)
-            if (e.target === e.currentTarget && !connectingSourceId) {
-              setIsPanning(true);
-              setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-              setSelectedNodeId(null);
-              setSelectedEdgeId(null);
-            }
-          }}
         >
           {viewMode === 'map' ? (
             <LocationView graph={graph} onSelectNode={setSelectedNodeId} onUpdateNode={handleUpdateNode} onDeleteNode={handleDeleteNode} onAddNodeAtLocation={(loc, pos) => handleAddNode(NodeType.SCENE, loc, pos)} selectedNodeId={selectedNodeId} />
@@ -927,7 +951,19 @@ const App: React.FC = () => {
             <DatabaseView graph={graph} selectedNodeId={selectedNodeId} onSelectNode={setSelectedNodeId} onUpdateNode={handleUpdateNode} onDeleteNode={handleDeleteNode} onAddNode={handleAddNode} />
           ) : (
             <>
-              <div className="absolute inset-0 transition-all duration-300 origin-top-left" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
+              <div
+                className="absolute inset-0 transition-all duration-300 origin-top-left"
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+                onMouseDown={(e) => {
+                  // v0.5.5: Start panning when clicking on the background (not on nodes)
+                  // Nodes call stopPropagation() so this only fires for background clicks
+                  if (!connectingSourceId) {
+                    setIsPanning(true);
+                    setSelectedNodeId(null);
+                    setSelectedEdgeId(null);
+                  }
+                }}
+              >
                 <svg className="absolute inset-0 w-[10000px] h-[10000px] pointer-events-none overflow-visible">
                   {renderEdges()}
                   {renderDraftEdge()}
@@ -1034,19 +1070,200 @@ const App: React.FC = () => {
           )}
         </section>
 
-        <aside className="w-80 border-l border-slate-800 bg-slate-900 z-30">
-          <PropertyEditor
-            node={selectedNode}
-            edge={selectedEdge}
-            variables={graph.variables}
-            graph={graph}
-            onUpdate={handleUpdateNode}
-            onDelete={handleDeleteNode}
-            onDeleteEdge={handleDeleteEdge}
-            onGenerateNode={handleGenerateNode}
-            isGenerating={generatingNodeId !== null}
-          />
-        </aside>
+        {/* v0.5.5: Floating Right Panel - Property Editor */}
+        {(showRightPanel || selectedNodeId) && (
+          <div className="absolute right-0 top-0 bottom-0 w-96 bg-slate-900/95 backdrop-blur-xl border-l border-slate-800 z-40 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between p-4 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-slate-400">
+                <Settings2 size={16} />
+                <span className="text-xs font-bold uppercase tracking-wider">属性编辑器</span>
+              </div>
+              <button
+                onClick={() => {
+                  setShowRightPanel(false);
+                  setSelectedNodeId(null);
+                  setSelectedEdgeId(null);
+                }}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <PropertyEditor
+              node={selectedNode}
+              edge={selectedEdge}
+              variables={graph.variables}
+              graph={graph}
+              onUpdate={handleUpdateNode}
+              onDelete={handleDeleteNode}
+              onDeleteEdge={handleDeleteEdge}
+              onGenerateNode={handleGenerateNode}
+              isGenerating={generatingNodeId !== null}
+            />
+          </div>
+        )}
+
+        {/* v0.5.5: Floating Panel Toggle Buttons */}
+        <div className="absolute top-4 left-4 z-50 flex gap-2">
+          <button
+            onClick={() => setShowLeftPanel(!showLeftPanel)}
+            className={`p-3 rounded-xl transition-all shadow-lg ${
+              showLeftPanel
+                ? 'bg-indigo-600 text-white'
+                : 'bg-slate-800/90 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700'
+            }`}
+            title="工具面板 (节点、AI引擎、变量)"
+          >
+            {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+          </button>
+          <button
+            onClick={() => {
+              setShowRightPanel(!showRightPanel);
+              if (!showRightPanel) {
+                setSelectedNodeId(null);
+                setSelectedEdgeId(null);
+              }
+            }}
+            className={`p-3 rounded-xl transition-all shadow-lg ${
+              (showRightPanel || selectedNodeId)
+                ? 'bg-indigo-600 text-white'
+                : 'bg-slate-800/90 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700'
+            }`}
+            title="属性编辑器"
+          >
+            {showRightPanel || selectedNodeId ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
+          </button>
+          <button
+            onClick={() => setShowHelp(true)}
+            className="p-3 rounded-xl transition-all shadow-lg bg-slate-800/90 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700"
+            title="操作说明"
+          >
+            <HelpCircle size={20} />
+          </button>
+        </div>
+
+        {/* v0.5.5: Help Panel */}
+        {showHelp && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowHelp(false)}>
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-6 border-b border-slate-700">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
+                    <HelpCircle size={20} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-lg">操作说明</h2>
+                    <p className="text-xs text-slate-500">NovaScribe VN Architect 快速入门指南</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowHelp(false)} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                  <X size={20} className="text-slate-400" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
+                {/* 鼠标操作 */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-indigo-400">
+                    <MousePointer2 size={16} />
+                    <span className="font-bold text-sm uppercase tracking-wider">鼠标操作</span>
+                  </div>
+                  <div className="grid gap-2 pl-6">
+                    <div className="flex items-center gap-3 text-sm">
+                      <kbd className="px-2 py-1 bg-slate-800 rounded text-xs font-mono">左键拖拽空白</kbd>
+                      <span className="text-slate-400">平移画布</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <kbd className="px-2 py-1 bg-slate-800 rounded text-xs font-mono">滚轮</kbd>
+                      <span className="text-slate-400">缩放画布 (0.3x - 3x)</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <kbd className="px-2 py-1 bg-slate-800 rounded text-xs font-mono">左键点击节点</kbd>
+                      <span className="text-slate-400">选中并打开属性编辑器</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <kbd className="px-2 py-1 bg-slate-800 rounded text-xs font-mono">拖拽节点端口</kbd>
+                      <span className="text-slate-400">创建节点连线</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 键盘快捷键 */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <Keyboard size={16} />
+                    <span className="font-bold text-sm uppercase tracking-wider">键盘快捷键</span>
+                  </div>
+                  <div className="grid gap-2 pl-6">
+                    <div className="flex items-center gap-3 text-sm">
+                      <kbd className="px-2 py-1 bg-slate-800 rounded text-xs font-mono">Delete / Backspace</kbd>
+                      <span className="text-slate-400">删除选中的节点或连线</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 功能说明 */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-amber-400">
+                    <Zap size={16} />
+                    <span className="font-bold text-sm uppercase tracking-wider">核心功能</span>
+                  </div>
+                  <div className="grid gap-3 pl-6">
+                    <div className="text-sm">
+                      <span className="font-bold text-slate-300">Tree / Canvas 视图</span>
+                      <p className="text-slate-500 text-xs mt-1">自动树状布局 vs 自由画布布局，可随时切换</p>
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-bold text-slate-300">AI 剧情引擎</span>
+                      <p className="text-slate-500 text-xs mt-1">输入故事梗概，自动生成完整的叙事树结构</p>
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-bold text-slate-300">模拟器 (RUN)</span>
+                      <p className="text-slate-500 text-xs mt-1">实时预览玩家体验流程，测试变量和条件</p>
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-bold text-slate-300">变量系统</span>
+                      <p className="text-slate-500 text-xs mt-1">支持布尔、数值、字符串变量，用于条件和效果</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 节点类型 */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-fuchsia-400">
+                    <GitGraph size={16} />
+                    <span className="font-bold text-sm uppercase tracking-wider">节点分类 (自动识别)</span>
+                  </div>
+                  <div className="grid gap-2 pl-6">
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-xs font-bold">START</span>
+                      <span className="text-slate-400">起始节点 - 只有出边无入边</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="px-2 py-0.5 bg-rose-500/20 text-rose-400 rounded text-xs font-bold">END</span>
+                      <span className="text-slate-400">结局节点 - 只有入边无出边</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs font-bold">STANDARD</span>
+                      <span className="text-slate-400">普通节点 - 有入边和出边</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="px-2 py-0.5 bg-slate-500/20 text-slate-400 rounded text-xs font-bold">FREE</span>
+                      <span className="text-slate-400">孤立节点 - 无任何连接</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 border-t border-slate-700 flex justify-end">
+                <button
+                  onClick={() => setShowHelp(false)}
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold transition-colors"
+                >
+                  知道了
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
       <Simulator graph={graph} isOpen={isSimulating} onClose={() => setIsSimulating(false)} />
     </div>
